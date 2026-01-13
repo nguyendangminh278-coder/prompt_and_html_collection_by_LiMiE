@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiMiE Prompt Library</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Updated Font: Be Vietnam Pro for better Vietnamese support -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        water: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9', // Primary Blue
+                            600: '#0284c7',
+                            900: '#0c4a6e',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['"Be Vietnam Pro"', 'sans-serif'], // Unified font for smoothness
+                        display: ['"Be Vietnam Pro"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 50%, #ffffff 100%);
+            background-attachment: fixed;
+            font-family: 'Be Vietnam Pro', sans-serif; /* Global font fix */
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #7dd3fc; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #38bdf8; 
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 8px 32px rgba(14, 165, 233, 0.08);
+        }
+
+        .btn-water {
+            background: linear-gradient(90deg, #38bdf8 0%, #0ea5e9 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-water:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -10px rgba(14, 165, 233, 0.5);
+            background: linear-gradient(90deg, #0ea5e9 0%, #0284c7 100%);
+        }
+
+        .btn-outline-water {
+            background: transparent;
+            border: 1px solid #7dd3fc;
+            color: #0284c7;
+            transition: all 0.3s ease;
+        }
+        .btn-outline-water:hover {
+            background: #f0f9ff;
+            border-color: #0ea5e9;
+        }
+
+        /* Loading animation for images */
+        .img-loading {
+            animation: pulse-bg 1.5s infinite;
+        }
+        @keyframes pulse-bg {
+            0% { background-color: #e0f2fe; }
+            50% { background-color: #bae6fd; }
+            100% { background-color: #e0f2fe; }
+        }
+
+        /* Tab Styles */
+        .tab-btn {
+            transition: all 0.3s ease;
+        }
+        .tab-btn.active {
+            background-color: #0ea5e9;
+            color: white;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+        }
+        .tab-btn:not(.active) {
+            background-color: white;
+            color: #64748b;
+        }
+        .tab-btn:not(.active):hover {
+            background-color: #f0f9ff;
+            color: #0ea5e9;
+        }
+    </style>
+</head>
+<body class="text-slate-700 antialiased min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-50 glass-card border-b border-water-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-water-500 flex items-center justify-center text-white shadow-lg shadow-water-200">
+                    <i class="fa-solid fa-layer-group text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-display text-2xl font-bold text-slate-800 tracking-wide uppercase">LiMiE <span class="text-water-500">Library</span></h1>
+                    <p class="text-xs text-slate-500 font-sans tracking-widest uppercase">Collection Hub</p>
+                </div>
+            </div>
+            
+            <a href="#contact" class="hidden sm:flex items-center gap-2 text-sm font-semibold text-water-900 hover:text-water-500 transition-colors">
+                <span>Liên hệ</span>
+                <i class="fa-solid fa-arrow-right"></i>
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        
+        <!-- Tab Navigation -->
+        <div class="flex justify-center mb-8">
+            <div class="bg-slate-100 p-1 rounded-full flex gap-1 shadow-inner">
+                <button onclick="switchTab('prompts')" id="tab-prompts" class="tab-btn active px-6 py-2 rounded-full text-sm font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> AI Prompts
+                </button>
+                <button onclick="switchTab('html')" id="tab-html" class="tab-btn px-6 py-2 rounded-full text-sm font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-code"></i> HTML Collection
+                </button>
+            </div>
+        </div>
+
+        <!-- Section: PROMPTS ADVICE (Only visible in Prompts Tab) -->
+        <div id="advice-section" class="glass-card rounded-2xl p-6 mb-10 relative overflow-hidden transition-all duration-300">
+            <div class="absolute top-0 right-0 w-32 h-32 bg-water-300 rounded-full blur-3xl opacity-20 -mr-10 -mt-10"></div>
+            
+            <div class="flex flex-col md:flex-row gap-8 items-start">
+                
+                <!-- Left: Common Sample Image -->
+                <div class="w-full md:w-1/3 lg:w-1/4 flex-shrink-0">
+                    <div class="aspect-[3/4] rounded-xl overflow-hidden shadow-lg border border-water-200 relative group bg-slate-50">
+                        <img src="https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/%E7%81%AF%E5%A1%94%E4%B9%8B%E5%85%89.png?raw=true" 
+                             alt="Ảnh mẫu chung" 
+                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none"></div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <p class="text-xs text-slate-500 font-bold uppercase tracking-widest bg-water-50 inline-block px-3 py-1 rounded-full border border-water-100">
+                            Ảnh Mẫu Chung
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Right: Advice Text -->
+                <div class="flex-grow pt-2">
+                    <h2 class="font-display text-xl font-bold text-slate-800 mb-6 flex items-center gap-3 pb-4 border-b border-slate-100">
+                        <div class="w-8 h-8 rounded-full bg-water-100 flex items-center justify-center text-water-500">
+                            <i class="fa-regular fa-lightbulb"></i>
+                        </div>
+                        LỜI KHUYÊN TỪ LIMIE
+                    </h2>
+                    
+                    <div class="grid md:grid-cols-2 gap-x-8 gap-y-4 text-sm text-slate-600">
+                        <div class="space-y-4">
+                            <div class="flex items-start gap-3">
+                                <i class="fa-solid fa-check text-green-500 mt-1"></i>
+                                <span>Nên tạo ảnh bằng <strong>Chat GPT (Pro)</strong> để có chất lượng tốt nhất. Gemini là lựa chọn thay thế.</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <i class="fa-solid fa-check text-green-500 mt-1"></i>
+                                <span>Ảnh mẫu bên trái dùng để AI tham khảo nét mặt. Kết quả thường giống khoảng 80-90%.</span>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex items-start gap-3">
+                                <i class="fa-solid fa-wand-magic-sparkles text-water-500 mt-1"></i>
+                                <span><strong>Mẹo:</strong> Đổi từ "He" thành "She" trong câu lệnh nếu bạn là nữ để có kết quả chính xác hơn.</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <i class="fa-solid fa-triangle-exclamation text-yellow-500 mt-1"></i>
+                                <span>Không sử dụng AI cho các giấy tờ thủ tục cần tính xác thực cao.</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-500 italic">
+                        <i class="fa-solid fa-circle-info mr-1 text-water-400"></i>
+                        Ảnh mẫu chung này được áp dụng cho hầu hết các prompt bên dưới, trừ khi có ảnh mẫu riêng biệt được ghi chú cụ thể.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section: HTML INSTRUCTIONS (Only visible in HTML Tab) -->
+        <div id="html-advice-section" class="glass-card rounded-2xl p-6 mb-10 relative overflow-hidden transition-all duration-300 hidden">
+            <div class="absolute top-0 right-0 w-32 h-32 bg-purple-300 rounded-full blur-3xl opacity-20 -mr-10 -mt-10"></div>
+            
+            <h2 class="font-display text-xl font-bold text-slate-800 mb-6 flex items-center gap-3 pb-4 border-b border-slate-100">
+                <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-500">
+                    <i class="fa-solid fa-terminal"></i>
+                </div>
+                HƯỚNG DẪN SỬ DỤNG CODE
+            </h2>
+            
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="bg-white/60 p-4 rounded-xl border border-slate-100">
+                    <div class="w-8 h-8 bg-water-100 text-water-600 rounded-full flex items-center justify-center font-bold mb-3">1</div>
+                    <h3 class="font-bold text-slate-800 mb-2">Tải File</h3>
+                    <p class="text-sm text-slate-600">Truy cập Github và tải toàn bộ mã nguồn về máy tính của bạn.</p>
+                </div>
+                <div class="bg-white/60 p-4 rounded-xl border border-slate-100">
+                    <div class="w-8 h-8 bg-water-100 text-water-600 rounded-full flex items-center justify-center font-bold mb-3">2</div>
+                    <h3 class="font-bold text-slate-800 mb-2">Chạy & Chỉnh Sửa</h3>
+                    <p class="text-sm text-slate-600">Dùng <strong>VS Code</strong> để mở và chạy thử. Đọc kỹ hướng dẫn đi kèm để chỉnh sửa (ảnh, text...).</p>
+                </div>
+                <div class="bg-white/60 p-4 rounded-xl border border-slate-100">
+                    <div class="w-8 h-8 bg-water-100 text-water-600 rounded-full flex items-center justify-center font-bold mb-3">3</div>
+                    <h3 class="font-bold text-slate-800 mb-2">Deploy</h3>
+                    <p class="text-sm text-slate-600">Upload code đã sửa lên Github cá nhân của bạn và bật Github Pages để sử dụng.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Container -->
+        <div id="content-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 min-h-[400px]">
+            <!-- Content will be injected via JS based on active tab -->
+        </div>
+
+    </main>
+
+    <!-- Footer / Contact -->
+    <footer id="contact" class="glass-card mt-12 border-t border-water-200">
+        <div class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+                <!-- Clean Title Only -->
+                <div class="text-center md:text-left">
+                    <h3 class="font-display text-2xl font-bold text-slate-800 tracking-wide">CONTACT TO WORK</h3>
+                </div>
+                
+                <!-- Contact Buttons -->
+                <div class="flex flex-col sm:flex-row flex-wrap justify-center md:justify-end gap-4">
+                    <a href="https://instagram.com/rinteru_d" target="_blank" class="group flex items-center gap-3 px-6 py-3 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 text-white flex items-center justify-center">
+                            <i class="fa-brands fa-instagram"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-400 font-bold uppercase">Instagram</p>
+                            <p class="text-sm font-semibold text-slate-700 group-hover:text-pink-600 transition-colors">rinteru_d</p>
+                        </div>
+                    </a>
+
+                    <a href="tel:0912421336" class="group flex items-center gap-3 px-6 py-3 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all">
+                        <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center">
+                            <i class="fa-solid fa-phone"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-400 font-bold uppercase">Zalo / Phone</p>
+                            <p class="text-sm font-semibold text-slate-700 group-hover:text-blue-600 transition-colors">0912421336</p>
+                        </div>
+                    </a>
+
+                    <!-- New Link: LiMiE Tarot -->
+                    <a href="https://nguyendangminh278-coder.github.io/reader-bandosao-tuvi/" target="_blank" class="group flex items-center gap-3 px-6 py-3 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center">
+                            <i class="fa-solid fa-star"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-400 font-bold uppercase">Tham khảo thêm</p>
+                            <p class="text-sm font-semibold text-slate-700 group-hover:text-purple-600 transition-colors">LiMiE Tarot</p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 transition-all duration-300 opacity-0 translate-y-10 z-50 pointer-events-none">
+        <i class="fa-solid fa-circle-check text-green-400"></i>
+        <span id="toast-message" class="text-sm font-medium">Đã sao chép!</span>
+    </div>
+
+    <!-- JavaScript Data & Logic -->
+    <script>
+        // Data Sources
+        const commonSampleImage = "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/%E7%81%AF%E5%A1%94%E4%B9%8B%E5%85%89.png?raw=true";
+
+        const promptsData = [
+            {
+                id: 1,
+                title: "Ảnh CV Chuyên Nghiệp",
+                prompt: "Giữ nguyên nét mặt và mái tóc ảnh mẫu giống 100% Tạo Ảnh chân dung kiểu thẻ căn cước của [ảnh đã tải lên], khuôn mặt rõ nét, giữ nguyên kiểu tóc ban đầu, mặc áo sơ mi trắng có cổ, nền xanh dương sáng trơn, bố cục ở giữa, chân thực, ánh sáng tốt, ảnh chính thức. Ảnh 8k sắc nét",
+                resultImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/01%20%E1%BA%A3nh%20CV.png?raw=true",
+                sampleImg: commonSampleImage,
+                note: "Chỉ dùng làm hồ sơ đơn giản."
+            },
+            {
+                id: 2,
+                title: "Profile Nền Đỏ (Red)",
+                prompt: "Vertical portrait, 1080x1920. Keep the same facial features. Subject wearing a black blazer. Stark cinematic lighting with strong contrast. Shot from a slightly low, upward angle to emphasize jawline and neck, evoking quiet dominance and sculptural elegance. Deep, saturated crimson red background for bold contrast against luminous skin and dark wardrobe.",
+                resultImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/02%20%E1%BA%A3nh%20profile%20n%E1%BB%81n%20%C4%91%E1%BB%8F.png?raw=true",
+                sampleImg: commonSampleImage
+            },
+            {
+                id: 3,
+                title: "Phong Cách Hirohito",
+                prompt: "Depicts me wearing the costume of emperor Hirohito from Japanese history incorporating the clothing design seen in moble legends. create his signature pose characterized by stark cinematic lighting and entense contrast captured with slightly lower upward facing angle that dramatize the subject's jawline and neck the composition evokes quiet dominance and scuptural elegance the background is a deep saturated crimson red creating a bold visual clash with the model's luminous skin and dark wardrobe lighting is tightly directional casting warm golden highlight on the side of the face while plunging the others into velvet shadow emphasizing bone structure with almost architectural precision the subject expression is unreadable and cool-toned—eyes half–lidded, lips relax suggesting detachment of quiet defiance the model wearing a heavy wool of felt overcoat it's texture richly defined against the skin's smooth dewy glow minimal retouching preserve skin texture and slight imperfections adding realism editorial tension is created through close dropping tonal control and the almost oppressive intimacy of the camera's proximity there are no props or accessories the visual impact is created purely through light shadow color saturation and posture evoking high fashion contemporary isolation and hyper-modern masculinity make the face and hairstyle as similar as possible to the one in the photo make the costume highly detailed and realistic maintain the same hairstyle and color, and use similar colors and texture",
+                resultImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/03%20Hirohito.png?raw=true",
+                sampleImg: commonSampleImage
+            },
+            {
+                id: 4,
+                title: "Cosplay Tần Thủy Hoàng",
+                prompt: "Hãy tạo cho tôi hình ảnh tôi mặc trang phục Tần Thủy Hoàng (Qin Shi Huang) trong anime Record of Ragnarok, bao gồm cả thiết kế bịt mắt và bộ trang phục mà Tần Thủy Hoàng mặc trong anime Record of Ragnarok. Tạo cho tôi tư thế đặc trưng của nhân vật. Hình ảnh mang phong cách điện ảnh mạnh mẽ với ánh sáng tương phản cao. Góc chụp hơi thấp, hướng lên trên, làm nổi bật đường viền hàm và cổ của nhân vật, tạo cảm giác uy quyền trầm lặng và vẻ đẹp như tượng điêu khắc. Phần nền là đỏ thẫm bão hòa, tạo sự tương phản thị giác táo bạo với làn da sáng của người mẫu và trang phục tối màu. Ánh sáng được chiếu theo hướng tập trung, tạo những điểm nhấn ánh vàng ấm ở một bên khuôn mặt, trong khi bên còn lại chìm vào bóng tối mịn như nhung, làm nổi bật cấu trúc xương mặt với độ chính xác gần như kiến trúc. Biểu cảm của nhân vật khó đoán, đôi mắt mang tông lạnh khép hờ, môi thả lỏng — gợi cảm giác xa cách hoặc thách thức thầm lặng. Người mẫu mặc một chiếc áo khoác dày bằng len hoặc nỉ, với chất liệu được được thể hiện rõ nét, tương phản với làn da mịn và ánh ẩm tự nhiên. Việc chỉnh sửa hình ảnh được giữ ở mức tối thiểu để bảo toàn kết cấu da và những khuyết điểm nhẹ, tăng tính chân thực. Sự căng thẳng mang tính biên tập được tạo ra thông qua bố cục cắt cận, kiểm soát tông màu và cảm giác thân mật gần như ngột ngạt từ khoảng cách máy ảnh. Không sử dụng đạo cụ hay phụ kiện; toàn bộ tác động thị giác được tạo nên hoàn toàn từ ánh sáng, bóng tối, độ bão hòa màu sắc và tư thế — gợi lên phong cách thời trang cao cấp, sự cô lập đương đại và vẻ nam tính siêu hiện đại. Hãy làm cho khuôn mặt và kiểu tóc giống nhất có thể với trong ảnh. Thiết kế trang phục thật chi tiết và chân thực. Giữ nguyên kiểu tóc và màu tóc, sử dụng màu sắc và chất liệu tương tự phong cách anime.",
+                resultImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/04%20t%E1%BA%A7n%20th%E1%BB%A7y%20ho%C3%A0ng/Gemini_Generated_Image_os68vxos68vxos68.png?raw=true",
+                sampleImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/04%20t%E1%BA%A7n%20th%E1%BB%A7y%20ho%C3%A0ng/a20b0dfb5f534cddbc013f6634e416eb~tplv-jj85edgx6n-image-medium.jpeg?raw=true"
+            },
+            {
+                id: 5,
+                title: "Dải Lụa Tết Nghệ Thuật",
+                prompt: "Professional photo manipulation. Add voluminous, multi-layered azure blue silk fabric cascading from the upper-right. Create complex three-dimensional depth with a structured sequence of layers: some delicate wisps should appear blurred in the immediate foreground to frame the subject, the main body of silk billows in the midground directly behind the woman, and further layers drape in the far background between the pillars. The fabric must be translucent, weightless, and flowing. Vary the blur intensity according to the depth of each layer to match the camera's shallow depth of field. Seamlessly integrate into the environment without altering background elements. Maintain the exact original camera perspective, face angle, and facial expression. High quality, realistic silk textures, 8k resolution, non-AI-generated look.",
+                resultImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/05%20%E1%BA%A3nh%20t%E1%BA%BFt/Gemini_Generated_Image_vzetnkvzetnkvzet.png?raw=true",
+                sampleImg: commonSampleImage
+            },
+            {
+                id: 6,
+                title: "Hoàng Đế Việt Nam (Bảo Đại)",
+                prompt: "Depict me wearing the costume of Emperor Bao Dai from VietNam history, incorporating the clothing design seen in Mobile Legends. Create his signature pose, characterized by stark cinematic lighting and intense contrast.Captured with a slightly low, upward-facing angle that dramatizes the subject's jawline and neck, the composition evokes quiet dominance and sculptural elegance.The background is a deep, saturated crimson red, creating a bold visual clash with the model's luminous skin and dark wardrobe.Lighting is tightly directional, casting warm golden highlights on one side of the face while plunging the other into velvety shadow, emphasizing bone structure with almost architectural precision. The subject's expression is unreadable and cool-toned-eyes halt-lidded, lips relaxed-suggesting detachment or quiet defiance. The model wears a heavy wool or felt overcoat, its texture richly defined against the skin's smooth, dewy glow. Minimal retouching preserves skin texture and slight imperfections, adding realism.Editorial tension is created through close cropping, tonal control, and the almost oppressive intimacy of the camera's proximity. There are no props or accessories; the visual impact is created purelythrough light, shadow, color saturation, and posture-evoking high fashion,contemporary isolation, and hyper-modern masculinity. Make the face and hairstyle as similar as possible to the one in the photo. Make the costume highly detailed and realistic. Maintain the same hairstyle and color, and use similar colors and textures",
+                resultImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/06%20%E1%BA%A3nh%20vua/06%20Vua%20vi%E1%BB%87t%20nam.png?raw=true",
+                sampleImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/06%20%E1%BA%A3nh%20vua/10-1-1624435191610-1624435192782476511303.webp?raw=true"
+            },
+            {
+                id: 7,
+                title: "Phong Cách Idol Ngầu",
+                prompt: "Fashion-style modern male portrait, ultra-realistic and sharp. A young handsome manwith flawless skin, a cold yet captivating gaze. He wears a black suit with a white shirt unbuttoned at the top, revealing a thin necklace. His pose is relaxed with one hand in his pocket, looking straight at the camera with a confident expression. Light falls trom the left side, casting a distinct shadow on the wall behind him.Minimalist studio setting with elegant and refined tones.",
+                resultImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/07%20%E1%BA%A3nh%20ng%C3%A0u.png?raw=true",
+                sampleImg: commonSampleImage
+            },
+            {
+                id: 8,
+                title: "Poster Zootopia 2",
+                prompt: "Using the attached image, create a high-angle selfie shot taken from above at 0.5x on an iPhone. I am standing in the center of the frame, taking the selfie together with Nick Wilde and Judy Hopps from the film Zootopia. All three of us are smiling and standing inside a movie theater, with a large cinema screen behind us displaying a visible poster for Zootopia 2. The theater seats in the background should be softly blurred, and the lighting should be dim, as if moments before the movie begins. The style should be photorealistic. Aspect ratio 3:4.",
+                resultImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/08%20Zootopia%202.png?raw=true",
+                sampleImg: commonSampleImage
+            },
+            {
+                id: 9,
+                title: "Hongkong Cinematic (Wong Kar-wai)",
+                prompt: "Wong Kar-wai's cinematic-style realistic portrait Using an uploaded photo as a reference, highlighting the jawline and neck to create a statuesque look, while maintaining the shape and identity of the face. Pose: Sitting with his head against the window, his hand resting on the edge, the streetlight's light shining through. Setting: Inside an old taxi with faded leather seats, the glass fogged up by rain, and the streetlight's light refracting into blurred streaks. Camera angle: Shot from outside the window, with overlapping reflections on the face. Lighting: Red-green neon lights passing by, causing the face to change color with the light. Clothing: Black button-down shirt, slightly open, hair appearing damp. Image tone: Red-green contrast, thick film grain, pronounced motion blur, and a hazy glow around the vehicle's headlights. Mood: Loneliness, solitude, a sense of a big city with no answering voice.",
+                resultImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/09%20hongkong%201.png?raw=true",
+                sampleImg: commonSampleImage
+            },
+            {
+                id: 10,
+                title: "Sinh Nhật Vintage Polaroid",
+                prompt: "Candid ultra-realistic birthday collage styled as authentic vintage Polaroid photos. Four square images in white Polaroid-style frames, arranged in a clean collage. Captured with a 50mm portrait lens at eye level, cropped waist-up. The young man wears a white shirt, with short wavy hair. He is smiling while holding a cake with lit candles, blowing the candles with smoke drifting, laughing while eating cake, and sitting softly beside the cake. Tone & Texture: True Polaroid analog feel. Slightly faded colors, warm nostalgic tint. Visible soft film grain, natural imperfections like dust, light scratches, and subtle blur. Softer highlights, muted contrast (not HDR, not glossy). Candle glow looks natural and slightly diffused. Lighting & Mood: indoor warm ambient light with cozy candle glow, cinematic but imperfect, natural household atmosphere. Style: authentic vintage instant film aesthetic with organic textures, imperfections, and dreamy softness. Negative Prompt: overly clean digital look, harsh sharpness, HDR, plastic skin, no grain, no fade, sterile studio feel, watermark, distorted faces, wrong outfit.",
+                resultImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/96fb1ff36626780488e06ef0d26b3d1ee74733ae/10.%20%E1%BA%A3nh%20sinh%20nh%E1%BA%ADt.png?raw=true",
+                sampleImg: commonSampleImage
+            },
+            {
+                id: 11,
+                title: "Poster Esport T1 (Zoe)",
+                prompt: "Hình ảnh sử dụng gương mặt của tôi, sử dụng khuôn mặt gốc của tôi, Giữ nguyên các đường nét đặc trưng của gương mặt, Giữ nguyên kiểu tóc (Ảnh 1). Tạo một poster thể thao điện tử chuyên nghiệp với hình ảnh một tuyển thủ nữ trẻ tuổi mặc áo đấu T1 | T1 Esports màu đỏ đen in logo Red Bull và T1. Hình ảnh có kích thước 4K, tỉ lệ ảnh ngang 16:9. Tuyền thủ đứng ở giữa poster, tay phải chỉ chính diện tự tin. Góc mặt hơi hướng lên tạo độ ngông. Ánh mắt nhìn thẳng, tự tin. Phía sau ghép hình ảnh rõ của vị tướng zoe T1 của Liên Minh Huyền Thoại (Ảnh 2). Giữ nguyên hình ảnh, không vẽ lại, không tạo lại. Thiết kế poster hiện đại và táo bạo, nổi bật với tông màu gradient hồng vũ trụ, hình ảnh sắc nét và kiểu chữ hiện đại. Các yếu tố chữ bao gồm các chỉ số nổi bật: \"TFT mùa.16\" \" Tỉ lệ đầu bảng 70%\" \"VNG GAMES\" có kích thước vừa đủ. Tiêu đề chữ \"Hàng hiệu\" kích thước lớn, in nghiêng, đặt ở giữa trên của poster, độ mờ chữ 30%, ẩn phía sau hình ảnh vị tướng zoe tí nị. Tiêu đề chữ lớn ở giữa bên dưới poster: \"LAM ZOE TRAM HO\". Chú thích viết tay, cỡ chữ nhỏ, ở giữa bên dưới cùng poster sử dụng font chữ của đội tuyển T1 Liên minh huyền thoại in nghiêng: \"T1 Rinteru\"",
+                resultImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/b0d592379b2132c3f82893392ea502d4f1ca67e4/11.%20%E1%BA%A3nh%20tuy%E1%BB%83nth%E1%BB%A7.png?raw=true",
+                sampleImg: commonSampleImage,
+                note: "Cần tải lên 2 ảnh: Ảnh khuôn mặt (1) và Ảnh tướng Zoe (2)."
+            }
+        ];
+
+        const htmlData = [
+            {
+                id: 'h1',
+                title: "Kho Christmas",
+                description: "Website chúc mừng Giáng sinh tặng người thương. Giao diện đẹp, hiệu ứng tuyết rơi lãng mạn.",
+                instruction: "Chuẩn bị 5 ảnh và đặt tên lần lượt là Image1 đến Image5. Chạy thử bằng VS Code.",
+                previewImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/a21f484c02f70095f6008c44bf08ac8c8e99f0bb/Screenshot%202026-01-13%20223614.png?raw=true",
+                demoLink: "https://nguyendangminh278-coder.github.io/merry.chirtmas.to.my.love/",
+                repoLink: "https://github.com/nguyendangminh278-coder/merry.chirtmas.to.my.love"
+            },
+            {
+                id: 'h2',
+                title: "Giao Diện Tu Tiên Kiếm",
+                description: "Giao diện phong cách tiên hiệp với hiệu ứng thanh kiếm huyền ảo.",
+                instruction: "Tải file HTML về máy và mở bằng trình duyệt để xem.",
+                previewImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/cd8e58753aba9f5d077a62a7c8cd4954d906e57e/tu%20ti%C3%AAn%20ki%E1%BA%BFm.png?raw=true",
+                demoLink: "tutien.html",
+                repoLink: "tutien.html",
+                download: true
+            }
+        ];
+
+        let activeTab = 'prompts';
+
+        function switchTab(tab) {
+            activeTab = tab;
+            
+            // Update Tab UI
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`tab-${tab}`).classList.add('active');
+
+            // Toggle Advice Sections
+            const adviceSection = document.getElementById('advice-section');
+            const htmlAdviceSection = document.getElementById('html-advice-section');
+            
+            if (tab === 'prompts') {
+                adviceSection.classList.remove('hidden');
+                htmlAdviceSection.classList.add('hidden');
+            } else {
+                adviceSection.classList.add('hidden');
+                htmlAdviceSection.classList.remove('hidden');
+            }
+
+            // Render Content
+            renderContent();
+        }
+
+        function renderContent() {
+            const container = document.getElementById('content-container');
+            let html = '';
+            
+            const data = activeTab === 'prompts' ? promptsData : htmlData;
+            const isHtmlMode = activeTab === 'html';
+
+            if (data.length === 0) {
+                container.innerHTML = `<div class="col-span-full text-center py-20 text-slate-400">Chưa có nội dung.</div>`;
+                return;
+            }
+
+            data.forEach((item, index) => {
+                if (isHtmlMode) {
+                    // Logic to handle download attribute and icon
+                    const downloadAttr = item.download ? 'download' : '';
+                    const repoIcon = item.repoLink.includes('github') ? 'fa-brands fa-github' : 'fa-solid fa-download';
+                    const repoText = item.download ? 'Tải File' : 'Tải Code';
+
+                    // HTML Card Layout
+                    html += `
+                        <div class="glass-card rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 group flex flex-col h-full">
+                            <div class="relative w-full aspect-video overflow-hidden bg-slate-100 img-loading">
+                                <img src="${item.previewImg}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700">
+                                <div class="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors"></div>
+                                <div class="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] px-2 py-1 rounded">HTML/CSS/JS</div>
+                            </div>
+                            <div class="p-5 flex-grow flex flex-col justify-between">
+                                <div>
+                                    <h3 class="font-display text-xl font-bold text-slate-800 mb-2">${item.title}</h3>
+                                    
+                                    <!-- Specific Instruction Box -->
+                                    <div class="mb-4 bg-yellow-50 border border-yellow-100 rounded-lg p-3 text-xs text-yellow-800">
+                                        <i class="fa-solid fa-triangle-exclamation mr-1"></i> <strong>Lưu ý:</strong> ${item.instruction}
+                                    </div>
+
+                                    <p class="text-sm text-slate-600 mb-4">${item.description}</p>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3 mt-auto">
+                                    <a href="${item.demoLink}" target="_blank" class="btn-water py-3 rounded-xl text-white font-semibold shadow-lg shadow-water-200/50 flex items-center justify-center gap-2 text-sm">
+                                        <i class="fa-solid fa-play"></i> Xem Demo
+                                    </a>
+                                    <a href="${item.repoLink}" target="_blank" ${downloadAttr} class="btn-outline-water py-3 rounded-xl font-bold flex items-center justify-center gap-2 text-sm">
+                                        <i class="${repoIcon}"></i> ${repoText}
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Prompt Card Layout (Existing)
+                    const displayPrompt = item.prompt.length > 100 ? item.prompt.substring(0, 100) + "..." : item.prompt;
+                    const isCommon = item.sampleImg === commonSampleImage;
+
+                    html += `
+                        <div class="glass-card rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 group flex flex-col h-full">
+                            <!-- Result Image (Large) -->
+                            <div class="relative w-full aspect-[3/4] overflow-hidden bg-slate-100 img-loading">
+                                <img src="${item.resultImg}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" loading="lazy">
+                                <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
+                                    <span class="text-water-200 text-xs font-bold tracking-widest uppercase mb-1 block">#0${index + 1}</span>
+                                    <h3 class="text-white font-display text-xl font-bold">${item.title}</h3>
+                                </div>
+                            </div>
+
+                            <!-- Content -->
+                            <div class="p-5 flex-grow flex flex-col justify-between">
+                                <div>
+                                    ${item.note ? `<div class="mb-3 px-3 py-1 bg-yellow-50 text-yellow-700 text-xs rounded border border-yellow-200 inline-block"><i class="fa-solid fa-circle-info mr-1"></i> ${item.note}</div>` : ''}
+                                    
+                                    <div class="bg-white/60 p-3 rounded-lg border border-slate-100 mb-4">
+                                        <p class="text-xs text-slate-500 font-bold uppercase mb-1">Prompt Preview:</p>
+                                        <p class="text-sm text-slate-600 line-clamp-3 italic">"${displayPrompt}"</p>
+                                    </div>
+                                </div>
+
+                                <!-- Actions Area -->
+                                <div class="space-y-3 mt-2">
+                                    <button onclick="copyToClipboard('${item.prompt.replace(/'/g, "\\'").replace(/\n/g, " ")}', 'Đã copy câu lệnh!')" 
+                                        class="w-full btn-water py-3 rounded-xl text-white font-semibold shadow-lg shadow-water-200/50 flex items-center justify-center gap-2">
+                                        <i class="fa-regular fa-copy"></i> Copy Câu Lệnh
+                                    </button>
+
+                                    ${!isCommon ? `
+                                    <a href="${item.sampleImg}" target="_blank" class="w-full btn-outline-water py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1">
+                                        <i class="fa-solid fa-expand"></i> Xem/Tải Ảnh Mẫu
+                                    </a>` : ''}
+                                    
+                                    ${isCommon ? '<p class="text-[10px] text-center text-slate-400 italic mt-1">*Ảnh mẫu chung - Không hỗ trợ tải về</p>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Copy Function
+        function copyToClipboard(text, message = "Đã copy thành công!") {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast(message);
+            }).catch(err => {
+                console.error('Không thể copy: ', err);
+                showToast("Lỗi trình duyệt, hãy chọn thủ công.");
+            });
+        }
+
+        // Toast Notification
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toast-message');
+            msgEl.textContent = msg;
+            
+            toast.classList.remove('opacity-0', 'translate-y-10', 'pointer-events-none');
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-10', 'pointer-events-none');
+            }, 3000);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            renderContent();
+        });
+
+    </script>
+</body>
+</html>
