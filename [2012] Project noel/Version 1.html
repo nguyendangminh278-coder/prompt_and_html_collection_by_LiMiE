@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Vẽ lại ảnh Image4 bằng Code</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #222; /* Nền tối cho ngầu */
+            color: white;
+            font-family: sans-serif;
+            flex-direction: column;
+        }
+        canvas {
+            border: 5px solid #fff;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            max-width: 90%; /* Để không bị tràn màn hình */
+            height: auto;
+        }
+        .controls { margin-top: 15px; }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+
+    <canvas id="myCanvas"></canvas>
+
+    <div class="controls">
+        <button onclick="applyEffect()">⚡ Kích hoạt chế độ Coder (Đen trắng)</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('myCanvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+
+        // 1. Tải ảnh của bạn vào
+        img.src = 'image4.jpg'; // Đảm bảo tên file ảnh đúng là image4.jpg
+
+        img.onload = function() {
+            // Đặt kích thước canvas bằng kích thước ảnh
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            // 2. Vẽ ảnh gốc lên canvas lần đầu
+            ctx.drawImage(img, 0, 0);
+            console.log("Ảnh đã tải xong!");
+        };
+
+        // 3. Hàm xử lý ảnh bằng thuật toán (Coder style)
+        function applyEffect() {
+            // Lấy dữ liệu của toàn bộ các điểm ảnh (pixels)
+            // imageData chứa mảng khổng lồ: [Đỏ, Xanh lá, Xanh dương, Alpha, Đỏ, ...]
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+
+            // Chạy vòng lặp qua từng pixel
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];     // Red
+                const g = data[i + 1]; // Green
+                const b = data[i + 2]; // Blue
+                
+                // Công thức tính độ sáng (Luma) để chuyển thành màu xám chuẩn mắt người
+                // Gray = 0.299*R + 0.587*G + 0.114*B
+                const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+
+                // Gán lại màu mới cho pixel đó
+                data[i] = gray;     // Red mới
+                data[i + 1] = gray; // Green mới
+                data[i + 2] = gray; // Blue mới
+                // data[i+3] là độ trong suốt (Alpha), giữ nguyên
+            }
+
+            // Đưa dữ liệu đã xử lý ngược lại lên canvas
+            ctx.putImageData(imageData, 0, 0);
+            alert("Đã xử lý xong bằng code!");
+        }
+    </script>
+</body>
+</html>
