@@ -142,12 +142,15 @@
         
         <!-- Tab Navigation -->
         <div class="flex justify-center mb-8">
-            <div class="bg-slate-100 p-1 rounded-full flex gap-1 shadow-inner">
-                <button onclick="switchTab('prompts')" id="tab-prompts" class="tab-btn active px-6 py-2 rounded-full text-sm font-bold flex items-center gap-2">
+            <div class="bg-slate-100 p-1 rounded-full flex gap-1 shadow-inner overflow-x-auto">
+                <button onclick="switchTab('prompts')" id="tab-prompts" class="tab-btn active px-6 py-2 rounded-full text-sm font-bold flex items-center gap-2 whitespace-nowrap">
                     <i class="fa-solid fa-wand-magic-sparkles"></i> AI Prompts
                 </button>
-                <button onclick="switchTab('html')" id="tab-html" class="tab-btn px-6 py-2 rounded-full text-sm font-bold flex items-center gap-2">
+                <button onclick="switchTab('html')" id="tab-html" class="tab-btn px-6 py-2 rounded-full text-sm font-bold flex items-center gap-2 whitespace-nowrap">
                     <i class="fa-solid fa-code"></i> HTML Collection
+                </button>
+                <button onclick="switchTab('sites')" id="tab-sites" class="tab-btn px-6 py-2 rounded-full text-sm font-bold flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-globe"></i> LiMiE Sites
                 </button>
             </div>
         </div>
@@ -317,6 +320,13 @@
                 note: "Chỉ dùng làm hồ sơ đơn giản."
             },
             {
+                id: 12, // New Sticker Prompt
+                title: "Tạo Sticker Chibi (12 Emotes)",
+                prompt: "Turn the uploaded image into a set of 12 chibi stickers (4x4 grid). The outfit should remain exactly the same as in the original photo. Include these expressions: laughing out loud, cute, eating watermelon, thinking, acting silly, angry, pouting/acting spoiled. Anime sticker style, white background.",
+                resultImg: "https://github.com/nguyendangminh278-coder/prompt_and_html_collection_by_LiMiE/blob/38d73331636e045040e8ebf25ef984b4dc370b86/000%20Sticker.jpg?raw=true",
+                sampleImg: commonSampleImage
+            },
+            {
                 id: 2,
                 title: "Profile Nền Đỏ (Red)",
                 prompt: "Vertical portrait, 1080x1920. Keep the same facial features. Subject wearing a black blazer. Stark cinematic lighting with strong contrast. Shot from a slightly low, upward angle to emphasize jawline and neck, evoking quiet dominance and sculptural elegance. Deep, saturated crimson red background for bold contrast against luminous skin and dark wardrobe.",
@@ -410,6 +420,27 @@
             }
         ];
 
+        // NEW DATA FOR "LiMiE Sites" TAB
+        const mySitesData = [
+            {
+                id: 's1',
+                title: "Xem Tử Vi 2026 (LiMiE GPT)",
+                description: "AI được huấn luyện chuyên sâu để phân tích lá số tử vi. Dự đoán vận hạn, công danh, tình duyên năm 2026 chính xác cao.",
+                link: "https://chatgpt.com/g/g-67f8e0f980308191bed7f5c54e76b974-xem-tu-vi-sieu-dung-sieu-chat-boi-limie-rrin?fbclid=IwZXh0bgNhZW0CMTAAYnJpZBExVlRTZ1VBQTIzUW9ITmlFdnNydGMGYXBwX2lkEDIyMjAzOTE3ODgyMDA4OTIAAR6bb3Woa-MmFuj_teNiNPIQihNILwT3e1CYMnb0kLKZ8F6zp76JRsqMFAAubA_aem_Uit3Ajxo2YuNKC9_Le9FvQ",
+                // Updated Image for Horoscope
+                previewImg: "https://images.unsplash.com/photo-1636622433525-127afdf3662d?q=80&w=800&auto=format&fit=crop", 
+                isHoroscope: true
+            },
+            {
+                id: 's2',
+                title: "Tính Điểm XTTN Bách Khoa",
+                description: "Công cụ hỗ trợ tính điểm xét tuyển tài năng vào Đại học Bách Khoa Hà Nội nhanh chóng và chuẩn xác.",
+                link: "https://chatgpt.com/canvas/shared/67f5d605e5908191881aa0fc51cb93be?fbclid=IwZXh0bgNhZW0CMTAAYnJpZBExVlRTZ1VBQTIzUW9ITmlFdnNydGMGYXBwX2lkEDIyMjAzOTE3ODgyMDA4OTIAAR4JbDz4fA9VhwbopvovvgcIFVQWlitW8btQ6MKIh4VOu_dGuhiCFrUHWNzoOg_aem_smoYa2Wxaz4_Asv20ucP1Q",
+                previewImg: "https://images.unsplash.com/photo-1517842645767-c639042777db?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80", // Placeholder study/university image
+                isHoroscope: false
+            }
+        ];
+
         let activeTab = 'prompts';
 
         function switchTab(tab) {
@@ -426,9 +457,13 @@
             if (tab === 'prompts') {
                 adviceSection.classList.remove('hidden');
                 htmlAdviceSection.classList.add('hidden');
-            } else {
+            } else if (tab === 'html') {
                 adviceSection.classList.add('hidden');
                 htmlAdviceSection.classList.remove('hidden');
+            } else {
+                // Hide both advice sections for Sites tab (instructions are inside cards)
+                adviceSection.classList.add('hidden');
+                htmlAdviceSection.classList.add('hidden');
             }
 
             // Render Content
@@ -439,8 +474,10 @@
             const container = document.getElementById('content-container');
             let html = '';
             
-            const data = activeTab === 'prompts' ? promptsData : htmlData;
-            const isHtmlMode = activeTab === 'html';
+            let data = [];
+            if (activeTab === 'prompts') data = promptsData;
+            else if (activeTab === 'html') data = htmlData;
+            else if (activeTab === 'sites') data = mySitesData;
 
             if (data.length === 0) {
                 container.innerHTML = `<div class="col-span-full text-center py-20 text-slate-400">Chưa có nội dung.</div>`;
@@ -448,13 +485,44 @@
             }
 
             data.forEach((item, index) => {
-                if (isHtmlMode) {
-                    // Logic to handle download attribute and icon
+                if (activeTab === 'sites') {
+                    // SITES CARD LAYOUT
+                    html += `
+                        <div class="glass-card rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 group flex flex-col h-full">
+                            <div class="relative w-full aspect-video overflow-hidden bg-slate-100 img-loading">
+                                <img src="${item.previewImg}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700">
+                                <div class="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors"></div>
+                            </div>
+                            <div class="p-5 flex-grow flex flex-col justify-between">
+                                <div>
+                                    <h3 class="font-display text-xl font-bold text-slate-800 mb-2">${item.title}</h3>
+                                    <p class="text-sm text-slate-600 mb-4">${item.description}</p>
+                                    
+                                    ${item.isHoroscope ? `
+                                    <div class="mb-4 bg-purple-50 border border-purple-100 rounded-lg p-3 text-xs text-purple-900 space-y-2">
+                                        <p class="font-bold"><i class="fa-solid fa-list-ol mr-1"></i> Hướng dẫn:</p>
+                                        <ol class="list-decimal pl-4 space-y-1">
+                                            <li>Tạo lá số tử vi tại <a href="https://lichngaytot.com/la-so-tu-vi.html?fbclid=IwZXh0bgNhZW0CMTAAYnJpZBExVlRTZ1VBQTIzUW9ITmlFdnNydGMGYXBwX2lkEDIyMjAzOTE3ODgyMDA4OTIAAR4JbDz4fA9VhwbopvovvgcIFVQWlitW8btQ6MKIh4VOu_dGuhiCFrUHWNzoOg_aem_smoYa2Wxaz4_Asv20ucP1Q" target="_blank" class="text-blue-600 underline hover:text-blue-800">Lịch Ngày Tốt</a>.</li>
+                                            <li>Tải ảnh lá số về máy.</li>
+                                            <li>Upload lên GPT (link dưới), chọn model cao nhất.</li>
+                                            <li>Nhập prompt: <strong>"phân tích lá số tử vi của tôi trong năm 2026"</strong>.</li>
+                                        </ol>
+                                        <p class="italic text-slate-500 mt-2"><i class="fa-solid fa-circle-exclamation mr-1"></i> Lưu ý: Nên dùng ChatGPT Pro để đọc ảnh chính xác nhất.</p>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                                <a href="${item.link}" target="_blank" class="w-full btn-water py-3 rounded-xl text-white font-semibold shadow-lg shadow-water-200/50 flex items-center justify-center gap-2 mt-4">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Truy cập Ngay
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                } else if (activeTab === 'html') {
+                    // HTML Card Layout
                     const downloadAttr = item.download ? 'download' : '';
                     const repoIcon = item.repoLink.includes('github') ? 'fa-brands fa-github' : 'fa-solid fa-download';
                     const repoText = item.download ? 'Tải File' : 'Tải Code';
 
-                    // HTML Card Layout
                     html += `
                         <div class="glass-card rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 group flex flex-col h-full">
                             <div class="relative w-full aspect-video overflow-hidden bg-slate-100 img-loading">
@@ -466,7 +534,6 @@
                                 <div>
                                     <h3 class="font-display text-xl font-bold text-slate-800 mb-2">${item.title}</h3>
                                     
-                                    <!-- Specific Instruction Box -->
                                     <div class="mb-4 bg-yellow-50 border border-yellow-100 rounded-lg p-3 text-xs text-yellow-800">
                                         <i class="fa-solid fa-triangle-exclamation mr-1"></i> <strong>Lưu ý:</strong> ${item.instruction}
                                     </div>
@@ -485,13 +552,12 @@
                         </div>
                     `;
                 } else {
-                    // Prompt Card Layout (Existing)
+                    // Prompt Card Layout
                     const displayPrompt = item.prompt.length > 100 ? item.prompt.substring(0, 100) + "..." : item.prompt;
                     const isCommon = item.sampleImg === commonSampleImage;
 
                     html += `
                         <div class="glass-card rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 group flex flex-col h-full">
-                            <!-- Result Image (Large) -->
                             <div class="relative w-full aspect-[3/4] overflow-hidden bg-slate-100 img-loading">
                                 <img src="${item.resultImg}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" loading="lazy">
                                 <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
@@ -500,7 +566,6 @@
                                 </div>
                             </div>
 
-                            <!-- Content -->
                             <div class="p-5 flex-grow flex flex-col justify-between">
                                 <div>
                                     ${item.note ? `<div class="mb-3 px-3 py-1 bg-yellow-50 text-yellow-700 text-xs rounded border border-yellow-200 inline-block"><i class="fa-solid fa-circle-info mr-1"></i> ${item.note}</div>` : ''}
@@ -511,7 +576,6 @@
                                     </div>
                                 </div>
 
-                                <!-- Actions Area -->
                                 <div class="space-y-3 mt-2">
                                     <button onclick="copyToClipboard('${item.prompt.replace(/'/g, "\\'").replace(/\n/g, " ")}', 'Đã copy câu lệnh!')" 
                                         class="w-full btn-water py-3 rounded-xl text-white font-semibold shadow-lg shadow-water-200/50 flex items-center justify-center gap-2">
