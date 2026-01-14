@@ -1,0 +1,1827 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;"
+    />
+    <title>Đại Canh Kiếm Trận (Standalone)</title>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Import Maps for dependencies -->
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.2.0",
+          "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+          "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+          "three": "https://esm.sh/three@0.160.0",
+          "three/examples/jsm/utils/BufferGeometryUtils.js": "https://esm.sh/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js",
+          "@react-three/fiber": "https://esm.sh/@react-three/fiber@8.15.12?external=react,react-dom,three",
+          "@react-three/postprocessing": "https://esm.sh/@react-three/postprocessing@2.16.0?external=react,react-dom,three,@react-three/fiber",
+          "postprocessing": "https://esm.sh/postprocessing@6.34.1?external=three",
+          "zustand": "https://esm.sh/zustand@4.4.7?external=react",
+          "@mediapipe/tasks-vision": "https://esm.sh/@mediapipe/tasks-vision@0.10.9"
+        }
+      }
+    </script>
+
+    <style>
+      /* index.css */
+      :root {
+        font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+        line-height: 1.5;
+        font-weight: 400;
+
+        color-scheme: light dark;
+        color: rgba(255, 255, 255, 0.87);
+        background-color: #242424;
+
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      body {
+        margin: 0;
+        display: flex;
+        place-items: center;
+        min-width: 320px;
+        min-height: 100vh;
+        background-color: #000;
+        overflow: hidden;
+      }
+
+      #root {
+        width: 100vw;
+        height: 100vh;
+      }
+
+      /* App.css */
+      #root {
+        width: 100%;
+        height: 100vh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        position: relative;
+      }
+
+      /* Disable selection */
+      canvas {
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      
+      /* Scrollbar cho Modal */
+      .custom-scroll::-webkit-scrollbar {
+        width: 8px;
+      }
+      .custom-scroll::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+      }
+      .custom-scroll::-webkit-scrollbar-thumb {
+        background: #00ff88;
+        border-radius: 4px;
+      }
+      .custom-scroll::-webkit-scrollbar-thumb:hover {
+        background: #00cc66;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+      import React, { useState, useEffect, useRef, useMemo } from 'react';
+      import { createRoot } from 'react-dom/client';
+      import * as THREE from 'three';
+      import { create } from 'zustand';
+      import { Canvas, useFrame, useThree } from '@react-three/fiber';
+      import { EffectComposer, Bloom } from '@react-three/postprocessing';
+      import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+      import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+
+      // ==========================================
+      // src/store.ts
+      // ==========================================
+
+      // Phát hiện thiết bị di động đơn giản
+      const isMobile =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+          navigator.userAgent
+        ) || window.innerWidth < 768;
+
+      const CONFIG = {
+        swordCount: isMobile ? 300 : 500,
+        pathHistoryLength: 300,
+        maxSpeed: 25,
+        sprintSpeed: 50,
+        steerForce: 28,
+        separationDist: 3,
+        separationForce: 10,
+        noiseScale: 0.3,
+        noiseStrength: 1,
+        formationRadius: 1.5,
+        dragonDensity: 0.8,
+        // Tham số chế độ Khiên
+        shieldRadius: 18,
+        shieldOrbitSpeed: 2.5,
+        // Tham số chế độ Liên Hoa
+        lotusRadius: 24,
+        lotusRotateSpeed: 2.5,
+        // Tham số Đại Canh Kiếm Trận
+        dagengRadius: 30,
+        dagengHeight: 20,
+        dagengRotateSpeed: 0.2,
+      };
+
+      const useHandStore = create((set, get) => ({
+        targetPosition: new THREE.Vector3(0, 0, 0),
+        isTracking: false,
+        gestureMode: 'LOTUS',
+        pathHistory: Array.from(
+          { length: CONFIG.pathHistoryLength },
+          () => new THREE.Vector3(0, 0, 0)
+        ),
+        lastDirection: new THREE.Vector3(0, 0, 0),
+
+        setTarget: (pos) => set({ targetPosition: pos }),
+
+        setTracking: (tracking) => set({ isTracking: tracking }),
+
+        setGestureMode: (mode) => set({ gestureMode: mode }),
+
+        updatePath: (pos) => {
+          const { pathHistory, lastDirection } = get();
+          const last = pathHistory[0];
+          const diff = pos.clone().sub(last);
+          const dist = diff.length();
+
+          if (dist > 0.1) {
+            lastDirection.copy(diff.normalize());
+            pathHistory.pop();
+            pathHistory.unshift(pos.clone());
+          }
+        },
+
+        extendPath: () => {
+          const { pathHistory, lastDirection } = get();
+          if (lastDirection.length() < 0.01) return;
+
+          const last = pathHistory[0];
+          const newPoint = last
+            .clone()
+            .add(lastDirection.clone().multiplyScalar(0.3));
+          pathHistory.pop();
+          pathHistory.unshift(newPoint);
+        },
+      }));
+
+      // ==========================================
+      // src/services/HandTrackingService.ts
+      // ==========================================
+
+      let globalVideo = null;
+      let globalLandmarker = null;
+      let initPromise = null;
+
+      function initHandTracking(videoElement) {
+        if (initPromise) return initPromise;
+
+        initPromise = (async () => {
+          globalVideo = videoElement;
+
+          try {
+            let isPortrait = false;
+            if (typeof screen !== 'undefined' && screen.orientation) {
+              isPortrait = screen.orientation.type.includes('portrait');
+            } else if (typeof window.orientation !== 'undefined') {
+              isPortrait = Math.abs(window.orientation) !== 90;
+            } else if (typeof window !== 'undefined') {
+              isPortrait = window.innerHeight > window.innerWidth;
+            }
+
+            const widthIdeal = isPortrait ? 480 : 640;
+            const heightIdeal = isPortrait ? 640 : 480;
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                width: { ideal: widthIdeal },
+                height: { ideal: heightIdeal },
+                facingMode: 'user',
+              },
+            });
+
+            videoElement.srcObject = stream;
+
+            await new Promise((resolve) => {
+              if (videoElement.readyState >= 2) {
+                resolve();
+              } else {
+                videoElement.onloadeddata = () => resolve();
+              }
+            });
+
+            await videoElement.play().catch((e) => {
+              console.warn('Auto-play failed, waiting for user interaction', e);
+            });
+
+            try {
+              const vision = await FilesetResolver.forVisionTasks(
+                'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/wasm'
+              );
+
+              globalLandmarker = await HandLandmarker.createFromOptions(
+                vision,
+                {
+                  baseOptions: {
+                    modelAssetPath:
+                      'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+                    delegate: 'GPU',
+                  },
+                  runningMode: 'VIDEO',
+                  numHands: 1,
+                }
+              );
+              console.log('Hand tracking initialized successfully');
+              return true;
+            } catch (wasmError) {
+              console.error('MediaPipe Init Failed:', wasmError);
+              throw new Error(
+                `Không thể tải mô hình AI: ${wasmError.message}. Vui lòng thử tải lại trang hoặc kiểm tra kết nối mạng.`
+              );
+            }
+          } catch (e) {
+            console.error('Hand tracking init error:', e);
+            window._handTrackingError = e.message;
+            initPromise = null;
+            return false;
+          }
+        })();
+
+        return initPromise;
+      }
+
+      function detectGesture(landmarks) {
+        const getAngle = (p1, p2, p3) => {
+          const v1 = {
+            x: p1.x - p2.x,
+            y: p1.y - p2.y,
+            z: p1.z - p2.z,
+          };
+          const v2 = {
+            x: p3.x - p2.x,
+            y: p3.y - p2.y,
+            z: p3.z - p2.z,
+          };
+          const dot = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+          const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y + v1.z * v1.z);
+          const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y + v2.z * v2.z);
+          const rad = Math.acos(dot / (mag1 * mag2));
+          return (rad * 180) / Math.PI;
+        };
+
+        const isFingerExtended = (fingerIdx) => {
+          let p1, p2, p3;
+          if (fingerIdx === 0) {
+            p1 = landmarks[1];
+            p2 = landmarks[2];
+            p3 = landmarks[3];
+          } else {
+            const offset = fingerIdx * 4;
+            p1 = landmarks[offset + 1];
+            p2 = landmarks[offset + 2];
+            p3 = landmarks[offset + 3];
+          }
+          const angle = getAngle(p1, p2, p3);
+          return angle > 150;
+        };
+
+        const fingerExtended = [0, 1, 2, 3, 4].map(isFingerExtended);
+        const [thumb, index, middle, ring, pinky] = fingerExtended;
+
+        const isGunGesture = thumb && index && !middle && !ring && !pinky;
+        const isSwordGesture = index && middle && !pinky;
+        const isFist = fingerExtended.filter((x) => x).length <= 1;
+        const isOpenPalm = index && middle && ring && pinky;
+        const isRockGesture = index && pinky && !middle && !ring;
+
+        if (isFist) return 'SHIELD';
+        if (isRockGesture) return 'DAGENG';
+        if (isGunGesture) return 'DRAGON';
+        if (isSwordGesture) return 'DRAGON';
+        if (isOpenPalm) return 'LOTUS';
+
+        return 'LOTUS';
+      }
+
+      // ==========================================
+      // src/components/SwordSwarm.tsx
+      // ==========================================
+
+      const simplex = {
+        noise3D: (x, y, z) => {
+          return (
+            Math.sin(x * 1.2 + y * 0.8) *
+            Math.cos(y * 1.1 + z * 0.9) *
+            Math.sin(z * 0.7 + x * 1.3)
+          );
+        },
+      };
+
+      function SwordSwarm() {
+        const meshRef = useRef(null);
+        const auraRef = useRef(null);
+        const dummy = useMemo(() => new THREE.Object3D(), []);
+
+        const positions = useRef([]);
+        const velocities = useRef([]);
+
+        if (positions.current.length === 0) {
+          for (let i = 0; i < CONFIG.swordCount; i++) {
+            positions.current.push(
+              new THREE.Vector3(
+                (Math.random() - 0.5) * 20,
+                (Math.random() - 0.5) * 15,
+                (Math.random() - 0.5) * 10 - 5
+              )
+            );
+            velocities.current.push(new THREE.Vector3());
+          }
+          window.swordPositions = positions.current;
+        }
+
+        const geometry = useMemo(() => {
+          const bladeGeo = new THREE.ConeGeometry(0.12, 2.5, 4);
+          bladeGeo.scale(0.4, 1, 1);
+          bladeGeo.rotateX(Math.PI / 2);
+          bladeGeo.translate(0, 0, 1.0);
+
+          const guardGeo = new THREE.BoxGeometry(0.5, 0.08, 0.15);
+          guardGeo.translate(0, 0, -0.2);
+
+          const handleGeo = new THREE.CylinderGeometry(0.05, 0.06, 0.7, 6);
+          handleGeo.rotateX(Math.PI / 2);
+          handleGeo.translate(0, 0, -0.6);
+
+          const merged = mergeGeometries([bladeGeo, guardGeo, handleGeo]);
+          return merged || bladeGeo;
+        }, []);
+
+        // COLOR REVERTED: Green (Original)
+        const material = useMemo(
+          () =>
+            new THREE.MeshBasicMaterial({
+              color: 0x00ff88, // Original Green
+              transparent: true,
+              opacity: 0.9,
+            }),
+          []
+        );
+
+        const auraGeometry = useMemo(() => {
+          const auraGeo = new THREE.ConeGeometry(0.15, 2.6, 4);
+          auraGeo.scale(0.5, 1, 1);
+          auraGeo.rotateX(Math.PI / 2);
+          auraGeo.translate(0, 0, 1.0);
+          return auraGeo;
+        }, []);
+
+        // COLOR REVERTED: Yellow/Gold (Original)
+        const auraMaterial = useMemo(
+          () =>
+            new THREE.MeshBasicMaterial({
+              color: 0xffdd44, // Original Gold Aura
+              transparent: true,
+              opacity: 0.6,
+              blending: THREE.AdditiveBlending,
+            }),
+          []
+        );
+
+        useFrame(({ clock }) => {
+          if (!meshRef.current) return;
+
+          const targetPosition = useHandStore.getState().targetPosition;
+          const isTracking = useHandStore.getState().isTracking;
+          const gestureMode = useHandStore.getState().gestureMode;
+          const pathHistory = useHandStore.getState().pathHistory;
+          const extendPath = useHandStore.getState().extendPath;
+
+          const time = clock.getElapsedTime();
+          const delta = 1 / 60;
+
+          let currentTarget = targetPosition;
+          if (!isTracking) {
+            currentTarget = new THREE.Vector3(0, 0, 0);
+            pathHistory.pop();
+            pathHistory.unshift(currentTarget.clone());
+          } else if (gestureMode === 'DRAGON') {
+            extendPath();
+          }
+
+          for (let i = 0; i < CONFIG.swordCount; i++) {
+            const pos = positions.current[i];
+            const vel = velocities.current[i];
+            const target = new THREE.Vector3();
+
+            if (gestureMode === 'SHIELD' && isTracking) {
+              const phi = Math.acos(1 - (2 * (i + 0.5)) / CONFIG.swordCount);
+              const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+
+              const orbitX =
+                CONFIG.shieldRadius *
+                Math.sin(phi) *
+                Math.cos(theta + time * CONFIG.shieldOrbitSpeed);
+              const orbitY =
+                CONFIG.shieldRadius *
+                Math.sin(phi) *
+                Math.sin(theta + time * CONFIG.shieldOrbitSpeed);
+              const orbitZ = CONFIG.shieldRadius * Math.cos(phi);
+
+              const rotatedX =
+                orbitX * Math.cos(time * 0.3) - orbitZ * Math.sin(time * 0.3);
+              const rotatedZ =
+                orbitX * Math.sin(time * 0.3) + orbitZ * Math.cos(time * 0.3);
+
+              target.set(
+                currentTarget.x + rotatedX,
+                currentTarget.y + orbitY,
+                currentTarget.z + rotatedZ
+              );
+
+              target.x += Math.sin(time * 3 + i) * 0.2;
+              target.y += Math.cos(time * 3 + i * 0.7) * 0.2;
+            } else if (
+              gestureMode === 'LOTUS' ||
+              (gestureMode === 'LOTUS' && !isTracking)
+            ) {
+              const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+              const maxRadius = CONFIG.lotusRadius;
+              const minRadius = 6;
+
+              const t = i / (CONFIG.swordCount - 1);
+              const rRatio = Math.sqrt(t);
+              const r = minRadius + (maxRadius - minRadius) * rRatio;
+
+              const theta = i * goldenAngle + time * CONFIG.lotusRotateSpeed;
+
+              const breathe = 1 + Math.sin(time * 2) * 0.05;
+              const currentR = r * breathe;
+
+              const x = currentR * Math.cos(theta);
+              const y = currentR * Math.sin(theta);
+              const z = Math.sin(time * 2 + i * 0.1) * 0.2;
+
+              target.set(
+                currentTarget.x + x,
+                currentTarget.y + y,
+                currentTarget.z + z
+              );
+            } else if (gestureMode === 'DAGENG' && isTracking) {
+              if (i === 0) {
+                const centralHeight = currentTarget.y + 5;
+                target.set(currentTarget.x, centralHeight, currentTarget.z);
+              } else {
+                const effectiveI = i - 1;
+                const effectiveCount = CONFIG.swordCount - 1;
+
+                const layerCount = 10;
+                const perLayer = Math.max(
+                  1,
+                  Math.floor(effectiveCount / layerCount)
+                );
+                const layerIdx = Math.floor(effectiveI / perLayer);
+                const idxInLayer = effectiveI % perLayer;
+
+                const radius = CONFIG.dagengRadius + layerIdx * 1.5 + 2;
+
+                const dir = layerIdx % 2 === 0 ? 1 : -1;
+                const theta =
+                  (idxInLayer / perLayer) * Math.PI * 2 +
+                  time * CONFIG.dagengRotateSpeed * dir;
+
+                const hCenter = currentTarget.y - 10;
+                const hRange = CONFIG.dagengHeight;
+                const hRand = Math.sin(effectiveI * 13.1) * 0.5 + 0.5;
+                const height = hCenter + (hRand - 0.5) * hRange;
+
+                target.set(
+                  currentTarget.x + Math.cos(theta) * radius,
+                  height,
+                  currentTarget.z + Math.sin(theta) * radius
+                );
+              }
+            } else {
+              if (i < 5) {
+                target.copy(currentTarget);
+                target.x += Math.sin(time * 8 + i) * 0.3;
+                target.y += Math.cos(time * 8 + i) * 0.3;
+              } else {
+                const pathIdx = i * 0.8;
+                const idxA = Math.min(
+                  Math.floor(pathIdx),
+                  pathHistory.length - 1
+                );
+                const idxB = Math.min(idxA + 1, pathHistory.length - 1);
+                const alpha = pathIdx - Math.floor(pathIdx);
+
+                if (pathHistory[idxA] && pathHistory[idxB]) {
+                  target.lerpVectors(
+                    pathHistory[idxA],
+                    pathHistory[idxB],
+                    alpha
+                  );
+                } else if (pathHistory[idxA]) {
+                  target.copy(pathHistory[idxA]);
+                } else {
+                  target.copy(currentTarget);
+                }
+
+                target.x += Math.sin(time * 10 + i * 0.5) * 0.2;
+                target.y += Math.cos(time * 10 + i * 0.5) * 0.2;
+
+                const ns = CONFIG.noiseScale;
+                const na =
+                  CONFIG.noiseStrength *
+                  (0.8 + Math.sin(time * 2 + i * 0.05) * 0.4);
+                target.x += simplex.noise3D(pos.x * ns, pos.y * ns, time) * na;
+                target.y +=
+                  simplex.noise3D(pos.y * ns, pos.z * ns, time + 100) * na;
+                target.z +=
+                  simplex.noise3D(pos.z * ns, pos.x * ns, time + 200) * na;
+              }
+            }
+
+            let speed =
+              gestureMode === 'SHIELD' ? CONFIG.sprintSpeed : CONFIG.maxSpeed;
+            if (target.distanceTo(pos) > 4) speed = CONFIG.sprintSpeed;
+            else if (target.distanceTo(pos) < 1)
+              speed = target.distanceTo(pos) * CONFIG.maxSpeed;
+
+            const desired = target.sub(pos);
+            const d = desired.length();
+
+            if (d > 0) {
+              desired.normalize();
+              if (d < 10) {
+                desired.multiplyScalar(speed * (d / 10));
+              } else {
+                desired.multiplyScalar(speed);
+              }
+            }
+
+            const steer = desired.sub(vel);
+            const steerFactor =
+              gestureMode === 'SHIELD' || gestureMode === 'LOTUS' ? 3 : 1;
+            steer.clampLength(0, CONFIG.steerForce * delta * steerFactor);
+
+            vel.add(steer);
+
+            if (
+              i > 0 &&
+              gestureMode !== 'SHIELD' &&
+              (gestureMode !== 'LOTUS' || !isTracking)
+            ) {
+              const prev = positions.current[i - 1];
+              const diff = pos.clone().sub(prev);
+              const d = diff.length();
+              if (d < CONFIG.separationDist && d > 0.01) {
+                diff.normalize().multiplyScalar(CONFIG.separationForce * delta);
+                vel.add(diff);
+              }
+            }
+
+            pos.add(vel.clone().multiplyScalar(delta));
+
+            dummy.position.copy(pos);
+
+            let lookTarget;
+            if (gestureMode === 'SHIELD' && isTracking) {
+              if (vel.length() > 0.1) {
+                lookTarget = pos.clone().add(vel.clone().normalize());
+              } else {
+                const relPos = pos.clone().sub(currentTarget);
+                const tangent = new THREE.Vector3(
+                  -relPos.z,
+                  0,
+                  relPos.x
+                ).normalize();
+                lookTarget = pos.clone().add(tangent);
+              }
+            } else if (gestureMode === 'LOTUS') {
+              const outward = pos.clone().sub(currentTarget).normalize();
+              lookTarget = pos.clone().add(outward);
+            } else if (gestureMode === 'DAGENG' && isTracking) {
+              lookTarget = pos.clone().add(new THREE.Vector3(0, -1, 0));
+            } else {
+              lookTarget = pos
+                .clone()
+                .add(vel.length() > 0.1 ? vel : new THREE.Vector3(0, 0, -1));
+            }
+            dummy.lookAt(lookTarget);
+
+            let targetScale = 1;
+            if (gestureMode === 'DAGENG' && isTracking) {
+              if (i === 0) targetScale = 6;
+              else targetScale = 1.5;
+            }
+
+            const currentScale = meshRef.current.userData.currentScale || 1;
+            const lerpSpeed = i === 0 && gestureMode === 'DAGENG' ? 0.01 : 0.02;
+            const newScale = THREE.MathUtils.lerp(
+              currentScale,
+              targetScale,
+              lerpSpeed
+            );
+            meshRef.current.userData.currentScale = newScale;
+
+            dummy.scale.set(newScale, newScale, newScale);
+            dummy.updateMatrix();
+            meshRef.current.setMatrixAt(i, dummy.matrix);
+
+            if (auraRef.current) {
+              const isActive =
+                gestureMode === 'SHIELD'
+                  ? Math.sin(time * 30 + i * 0.5) > 0.0
+                  : Math.sin(time * 20 + i * 0.7) > 0.3;
+
+              const auraScale = newScale * (isActive ? 1.3 : 1.0);
+
+              if (!isActive && !(i === 0 && gestureMode === 'DAGENG')) {
+                dummy.scale.set(0, 0, 0);
+              } else {
+                dummy.scale.set(auraScale, auraScale, auraScale);
+              }
+
+              dummy.updateMatrix();
+              auraRef.current.setMatrixAt(i, dummy.matrix);
+              dummy.scale.set(newScale, newScale, newScale);
+            }
+          }
+
+          meshRef.current.instanceMatrix.needsUpdate = true;
+          if (auraRef.current) {
+            auraRef.current.instanceMatrix.needsUpdate = true;
+          }
+        });
+
+        return (
+          <group>
+            <instancedMesh
+              ref={meshRef}
+              args={[geometry, material, CONFIG.swordCount]}
+              frustumCulled={false}
+            />
+            <instancedMesh
+              ref={auraRef}
+              args={[auraGeometry, auraMaterial, CONFIG.swordCount]}
+              frustumCulled={false}
+            />
+          </group>
+        );
+      }
+
+      // ==========================================
+      // src/components/DivineLightning.tsx
+      // ==========================================
+      function DivineLightning() {
+        const lineRef = useRef(null);
+
+        const geometry = useMemo(() => {
+          const geo = new THREE.BufferGeometry();
+          const posArray = new Float32Array(100 * 3 * 2);
+          geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+          return geo;
+        }, []);
+
+        // COLOR REVERTED: Gold/Yellow (Original)
+        const material = useMemo(
+          () =>
+            new THREE.LineBasicMaterial({
+              color: 0xffdd44, // Original Yellow
+              transparent: true,
+              opacity: 0.8,
+              blending: THREE.AdditiveBlending,
+            }),
+          []
+        );
+
+        const intensityRef = useRef(0);
+
+        useFrame(({ clock }) => {
+          if (!lineRef.current) return;
+
+          const isTracking = useHandStore.getState().isTracking;
+          const gestureMode = useHandStore.getState().gestureMode;
+          const time = clock.getElapsedTime();
+
+          const targetIntensity = gestureMode === 'DAGENG' ? 1 : 0;
+          intensityRef.current = THREE.MathUtils.lerp(
+            intensityRef.current,
+            targetIntensity,
+            0.02
+          );
+          const intensity = intensityRef.current;
+
+          const flashSpeed = 15 + intensity * 10;
+          const flashThreshold = 0.7 - intensity * 0.3;
+          const count = Math.floor(30 + intensity * 70);
+          const maxDist = 5 + intensity * 20;
+          const jitter = 0.2 + intensity * 0.3;
+
+          const flash = Math.sin(time * flashSpeed) > flashThreshold;
+          lineRef.current.visible = flash && isTracking;
+          if (!flash || !isTracking) return;
+
+          const positions = window.swordPositions;
+          if (!positions || positions.length === 0) return;
+
+          const posAttr = lineRef.current.geometry.attributes.position;
+          const arr = posAttr.array;
+          let idx = 0;
+
+          for (let i = 0; i < count; i++) {
+            const a = Math.floor(Math.random() * CONFIG.swordCount);
+            const b = Math.floor(Math.random() * CONFIG.swordCount);
+
+            if (a >= positions.length || b >= positions.length) continue;
+
+            const pA = positions[a];
+            const pB = positions[b];
+
+            if (pA.distanceTo(pB) < maxDist) {
+              arr[idx++] = pA.x + (Math.random() - 0.5) * jitter;
+              arr[idx++] = pA.y + (Math.random() - 0.5) * jitter;
+              arr[idx++] = pA.z + (Math.random() - 0.5) * jitter;
+              arr[idx++] = pB.x + (Math.random() - 0.5) * jitter;
+              arr[idx++] = pB.y + (Math.random() - 0.5) * jitter;
+              arr[idx++] = pB.z + (Math.random() - 0.5) * jitter;
+            }
+          }
+          while (idx < arr.length) arr[idx++] = 0;
+          posAttr.needsUpdate = true;
+        });
+
+        return (
+          <lineSegments ref={lineRef} geometry={geometry} material={material} />
+        );
+      }
+
+      // ==========================================
+      // src/components/MagicCircle.tsx
+      // ==========================================
+      const vertexShader = `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+      `;
+
+      // COLOR REVERTED: Gold (Original)
+      const fragmentShader = `
+      varying vec2 vUv;
+      uniform float uTime;
+      uniform float uOpacity;
+
+      void main() {
+        vec2 center = vec2(0.5, 0.5);
+        float dist = distance(vUv, center);
+        
+        float ring1 = smoothstep(0.48, 0.485, dist) - smoothstep(0.49, 0.495, dist);
+        float ring2 = smoothstep(0.42, 0.425, dist) - smoothstep(0.43, 0.435, dist);
+        
+        float angle = atan(vUv.y - 0.5, vUv.x - 0.5);
+        float runes = sin(angle * 10.0 + uTime) * 0.5 + 0.5;
+        float runeRing = smoothstep(0.35, 0.45, dist) * runes * (smoothstep(0.45, 0.35, dist));
+
+        // Original Gold
+        vec3 color = vec3(1.0, 0.9, 0.4); 
+        float alpha = (ring1 + ring2 + runeRing * 0.3) * uOpacity;
+        
+        gl_FragColor = vec4(color, alpha);
+      }
+      `;
+
+      function MagicCircle() {
+        const meshRef = useRef(null);
+        const materialRef = useRef(null);
+        const gestureMode = useHandStore((state) => state.gestureMode);
+        const isTracking = useHandStore((state) => state.isTracking);
+
+        const opacityRef = useRef(0);
+
+        useFrame(({ clock }) => {
+          if (!meshRef.current || !materialRef.current) return;
+
+          const time = clock.getElapsedTime();
+          const targetOpacity = gestureMode === 'DAGENG' && isTracking ? 1 : 0;
+
+          opacityRef.current = THREE.MathUtils.lerp(
+            opacityRef.current,
+            targetOpacity,
+            0.05
+          );
+
+          materialRef.current.uniforms.uTime.value = time;
+          materialRef.current.uniforms.uOpacity.value = opacityRef.current;
+
+          meshRef.current.rotation.z = time * 0.1;
+          meshRef.current.visible = opacityRef.current > 0.01;
+
+          if (meshRef.current.visible) {
+            const targetPos = useHandStore.getState().targetPosition;
+            meshRef.current.position.set(
+              targetPos.x,
+              targetPos.y + 15,
+              targetPos.z
+            );
+          }
+        });
+
+        const uniforms = useMemo(
+          () => ({
+            uTime: { value: 0 },
+            uOpacity: { value: 0 },
+          }),
+          []
+        );
+
+        return (
+          <mesh
+            ref={meshRef}
+            rotation={[-Math.PI / 2, 0, 0]}
+            scale={[40, 40, 1]}
+          >
+            <planeGeometry args={[1, 1]} />
+            <shaderMaterial
+              ref={materialRef}
+              vertexShader={vertexShader}
+              fragmentShader={fragmentShader}
+              transparent={true}
+              side={THREE.DoubleSide}
+              depthWrite={false}
+              blending={THREE.AdditiveBlending}
+              uniforms={uniforms}
+            />
+          </mesh>
+        );
+      }
+
+      // ==========================================
+      // src/components/ShieldOrb.tsx
+      // ==========================================
+      function ShieldOrb() {
+        const meshRef = useRef(null);
+        const glowRef = useRef(null);
+
+        useFrame(({ clock }) => {
+          const targetPosition = useHandStore.getState().targetPosition;
+          const isTracking = useHandStore.getState().isTracking;
+          const gestureMode = useHandStore.getState().gestureMode;
+          const time = clock.getElapsedTime();
+
+          const shouldShow = isTracking && gestureMode === 'SHIELD';
+
+          if (meshRef.current && glowRef.current) {
+            const targetOpacity = shouldShow ? 0.3 : 0;
+            const currentOpacity = meshRef.current.material.opacity;
+            const newOpacity = THREE.MathUtils.lerp(
+              currentOpacity,
+              targetOpacity,
+              0.1
+            );
+
+            meshRef.current.material.opacity = newOpacity;
+            glowRef.current.material.opacity = newOpacity * 0.5;
+
+            meshRef.current.visible = newOpacity > 0.01;
+            glowRef.current.visible = newOpacity > 0.01;
+
+            const currentPos = isTracking
+              ? targetPosition
+              : new THREE.Vector3(
+                  Math.sin(time * 0.5) * 6,
+                  Math.cos(time * 0.4) * 4,
+                  Math.sin(time * 0.3) * 3
+                );
+
+            meshRef.current.position.lerp(currentPos, 0.1);
+            glowRef.current.position.lerp(currentPos, 0.1);
+
+            const breathe = 1 + Math.sin(time * 2) * 0.03;
+            meshRef.current.scale.setScalar(breathe);
+            glowRef.current.scale.setScalar(breathe * 1.15);
+
+            meshRef.current.rotation.y = time * 0.2;
+            meshRef.current.rotation.x = time * 0.1;
+          }
+        });
+
+        const innerMaterial = useMemo(
+          () =>
+            new THREE.MeshBasicMaterial({
+              color: 0x88ccff,
+              transparent: true,
+              opacity: 0,
+              side: THREE.DoubleSide,
+              blending: THREE.AdditiveBlending,
+            }),
+          []
+        );
+
+        const glowMaterial = useMemo(
+          () =>
+            new THREE.MeshBasicMaterial({
+              color: 0x4488ff,
+              transparent: true,
+              opacity: 0,
+              side: THREE.BackSide,
+              blending: THREE.AdditiveBlending,
+            }),
+          []
+        );
+
+        return (
+          <group>
+            <mesh ref={meshRef}>
+              <icosahedronGeometry args={[CONFIG.shieldRadius * 0.98, 2]} />
+              <primitive object={innerMaterial} attach="material" />
+            </mesh>
+
+            <mesh ref={glowRef}>
+              <sphereGeometry args={[CONFIG.shieldRadius * 1.1, 32, 32]} />
+              <primitive object={glowMaterial} attach="material" />
+            </mesh>
+          </group>
+        );
+      }
+
+      // ==========================================
+      // src/components/CameraController.tsx
+      // ==========================================
+      function CameraController() {
+        const { camera } = useThree();
+        const SMOOTH_SPEED = 0.02;
+
+        const smoothTarget = useRef(new THREE.Vector3(0, 0, 0));
+        const smoothCamPos = useRef(new THREE.Vector3(0, 5, 35));
+        const smoothLookAt = useRef(new THREE.Vector3(0, 0, 0));
+        const smoothZoom = useRef(30);
+
+        useFrame(({ clock }) => {
+          const isTracking = useHandStore.getState().isTracking;
+          const time = clock.getElapsedTime();
+          const positions = window.swordPositions;
+
+          let formationSize = 10;
+          const formationCenter = new THREE.Vector3(0, 0, 0);
+
+          if (positions && positions.length > 0) {
+            let minX = Infinity,
+              maxX = -Infinity;
+            let minY = Infinity,
+              maxY = -Infinity;
+            let sumX = 0,
+              sumY = 0,
+              sumZ = 0;
+
+            for (const pos of positions) {
+              minX = Math.min(minX, pos.x);
+              maxX = Math.max(maxX, pos.x);
+              minY = Math.min(minY, pos.y);
+              maxY = Math.max(maxY, pos.y);
+              sumX += pos.x;
+              sumY += pos.y;
+              sumZ += pos.z;
+            }
+
+            formationCenter.set(
+              sumX / positions.length,
+              sumY / positions.length,
+              sumZ / positions.length
+            );
+
+            const spanX = maxX - minX;
+            const spanY = maxY - minY;
+            formationSize = Math.max(spanX, spanY);
+          }
+
+          const gestureMode = useHandStore.getState().gestureMode;
+
+          const targetZoom = THREE.MathUtils.clamp(
+            formationSize * 1.2 + 18,
+            22,
+            gestureMode === 'DAGENG' ? 55 : 75
+          );
+
+          smoothZoom.current = THREE.MathUtils.lerp(
+            smoothZoom.current,
+            targetZoom,
+            SMOOTH_SPEED
+          );
+
+          let followPoint;
+          if (isTracking) {
+            followPoint = formationCenter.clone();
+          } else {
+            followPoint = new THREE.Vector3(
+              Math.sin(time * 0.5) * 6,
+              Math.cos(time * 0.4) * 4,
+              0
+            );
+          }
+          smoothTarget.current.lerp(followPoint, SMOOTH_SPEED);
+
+          const desiredCamPos = new THREE.Vector3(
+            smoothTarget.current.x * 0.25,
+            smoothTarget.current.y * 0.15 + 3,
+            smoothZoom.current
+          );
+          smoothCamPos.current.lerp(desiredCamPos, SMOOTH_SPEED);
+          camera.position.copy(smoothCamPos.current);
+
+          const desiredLookAt = new THREE.Vector3(
+            smoothTarget.current.x * 0.4,
+            smoothTarget.current.y * 0.25,
+            4
+          );
+          smoothLookAt.current.lerp(desiredLookAt, SMOOTH_SPEED);
+          camera.lookAt(smoothLookAt.current);
+        });
+
+        return null;
+      }
+
+      // ==========================================
+      // src/components/Scene.tsx
+      // ==========================================
+
+      function StarField() {
+        const starsRef = useRef(null);
+
+        const [positions, colors] = useMemo(() => {
+          const count = 2000;
+          const pos = new Float32Array(count * 3);
+          const col = new Float32Array(count * 3);
+
+          for (let i = 0; i < count; i++) {
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const r = 80 + Math.random() * 40;
+
+            pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+            pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+            pos[i * 3 + 2] = r * Math.cos(phi);
+
+            const brightness = 0.5 + Math.random() * 0.5;
+            col[i * 3] = brightness;
+            col[i * 3 + 1] = brightness;
+            col[i * 3 + 2] = brightness + Math.random() * 0.2;
+          }
+
+          return [pos, col];
+        }, []);
+
+        useFrame(({ clock }) => {
+          if (starsRef.current) {
+            starsRef.current.rotation.y = clock.getElapsedTime() * 0.01;
+          }
+        });
+
+        return (
+          <points ref={starsRef}>
+            <bufferGeometry>
+              <bufferAttribute
+                attach="attributes-position"
+                args={[positions, 3]}
+              />
+              <bufferAttribute attach="attributes-color" args={[colors, 3]} />
+            </bufferGeometry>
+            <pointsMaterial
+              size={0.3}
+              vertexColors
+              transparent
+              opacity={0.8}
+              sizeAttenuation
+            />
+          </points>
+        );
+      }
+
+      function SpiritParticles() {
+        const particlesRef = useRef(null);
+
+        const positions = useMemo(() => {
+          const count = 200;
+          const pos = new Float32Array(count * 3);
+
+          for (let i = 0; i < count; i++) {
+            pos[i * 3] = (Math.random() - 0.5) * 60;
+            pos[i * 3 + 1] = (Math.random() - 0.5) * 40;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * 40;
+          }
+
+          return pos;
+        }, []);
+
+        useFrame(({ clock }) => {
+          if (particlesRef.current) {
+            const posArr =
+              particlesRef.current.geometry.attributes.position.array;
+            const time = clock.getElapsedTime();
+
+            for (let i = 0; i < posArr.length / 3; i++) {
+              posArr[i * 3 + 1] += Math.sin(time + i) * 0.01;
+
+              if (posArr[i * 3 + 1] > 20) {
+                posArr[i * 3 + 1] = -20;
+              }
+            }
+            particlesRef.current.geometry.attributes.position.needsUpdate = true;
+          }
+        });
+
+        return (
+          <points ref={particlesRef}>
+            <bufferGeometry>
+              <bufferAttribute
+                attach="attributes-position"
+                args={[positions, 3]}
+              />
+            </bufferGeometry>
+            <pointsMaterial
+              size={0.15}
+              color="#88ffaa" /* Reverted to Green */
+              transparent
+              opacity={0.5}
+              blending={THREE.AdditiveBlending}
+            />
+          </points>
+        );
+      }
+
+      function Scene() {
+        return (
+          <React.Fragment>
+            <color attach="background" args={['#030810']} />
+            <fog attach="fog" args={['#030810', 30, 100]} />
+
+            <StarField />
+            <SpiritParticles />
+
+            <ambientLight intensity={0.1} color="#4488ff" />
+
+            <CameraController />
+            <SwordSwarm />
+            <DivineLightning />
+            <MagicCircle />
+
+            <EffectComposer>
+              <Bloom
+                luminanceThreshold={0.1}
+                luminanceSmoothing={0.4}
+                intensity={2.0}
+                radius={0.6}
+                mipmapBlur
+              />
+            </EffectComposer>
+          </React.Fragment>
+        );
+      }
+
+      // ==========================================
+      // src/components/HandController.tsx
+      // ==========================================
+      let lastVideoTime = -1;
+
+      function HandController() {
+        const { camera } = useThree();
+        const setTarget = useHandStore((state) => state.setTarget);
+        const setTracking = useHandStore((state) => state.setTracking);
+        const setGestureMode = useHandStore((state) => state.setGestureMode);
+        const updatePath = useHandStore((state) => state.updatePath);
+
+        const pendingGesture = useRef(null);
+        const gestureStartTime = useRef(0);
+        const currentConfirmedGesture = useRef('LOTUS');
+
+        useFrame(({ clock }) => {
+          if (!globalLandmarker || !globalVideo || globalVideo.readyState !== 4)
+            return;
+          if (globalVideo.currentTime === lastVideoTime) return;
+
+          lastVideoTime = globalVideo.currentTime;
+          const results = globalLandmarker.detectForVideo(
+            globalVideo,
+            performance.now()
+          );
+
+          if (results.landmarks && results.landmarks.length > 0) {
+            setTracking(true);
+            const lm = results.landmarks[0];
+
+            const detectedGesture = detectGesture(lm);
+            const now = clock.getElapsedTime();
+
+            if (detectedGesture !== pendingGesture.current) {
+              pendingGesture.current = detectedGesture;
+              gestureStartTime.current = now;
+            } else {
+              const duration = now - gestureStartTime.current;
+              const DELAY_THRESHOLD = 0.25;
+
+              if (
+                duration > DELAY_THRESHOLD &&
+                detectedGesture !== currentConfirmedGesture.current
+              ) {
+                currentConfirmedGesture.current = detectedGesture;
+                setGestureMode(detectedGesture);
+              }
+            }
+
+            const activeGesture = currentConfirmedGesture.current;
+            let targetPoint;
+
+            if (activeGesture === 'SHIELD' || activeGesture === 'LOTUS') {
+              const wrist = lm[0];
+              const middleBase = lm[9];
+              targetPoint = {
+                x: (wrist.x + middleBase.x) / 2,
+                y: (wrist.y + middleBase.y) / 2,
+              };
+            } else {
+              targetPoint = lm[8];
+            }
+
+            const ndcX = (1 - targetPoint.x) * 2 - 1;
+            const ndcY = -(targetPoint.y * 2 - 1);
+
+            const vec = new THREE.Vector3(ndcX, ndcY, 0.5).unproject(camera);
+            const dir = vec.sub(camera.position).normalize();
+            const dist = -camera.position.z / dir.z;
+            const worldPos = camera.position
+              .clone()
+              .add(dir.multiplyScalar(dist));
+
+            setTarget(worldPos);
+
+            if (activeGesture === 'DRAGON') {
+              updatePath(worldPos);
+            }
+          } else {
+            setTracking(false);
+          }
+        });
+
+        return null;
+      }
+
+      // ==========================================
+      // src/components/OrientationGuard.tsx
+      // ==========================================
+      function OrientationGuard({ children }) {
+        const [isPortrait, setIsPortrait] = useState(false);
+        const [dismissed, setDismissed] = useState(false);
+
+        useEffect(() => {
+          const checkOrientation = () => {
+            let isVertical = false;
+
+            if (screen.orientation) {
+              isVertical = screen.orientation.type.includes('portrait');
+            } else if (typeof window.orientation !== 'undefined') {
+              isVertical = Math.abs(window.orientation) !== 90;
+            } else if (window.matchMedia) {
+              isVertical = window.matchMedia('(orientation: portrait)').matches;
+            } else {
+              isVertical = window.innerHeight > window.innerWidth;
+            }
+
+            const isMobile =
+              (navigator.userAgentData && navigator.userAgentData.mobile) ||
+              /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+                navigator.userAgent
+              ) ||
+              'ontouchstart' in window ||
+              window.innerWidth < 1024;
+
+            setIsPortrait(isMobile && isVertical);
+          };
+
+          checkOrientation();
+
+          if (screen.orientation) {
+            screen.orientation.addEventListener('change', checkOrientation);
+          }
+          window.addEventListener('orientationchange', checkOrientation);
+          window.addEventListener('resize', checkOrientation);
+
+          return () => {
+            if (screen.orientation) {
+              screen.orientation.removeEventListener(
+                'change',
+                checkOrientation
+              );
+            }
+            window.removeEventListener('orientationchange', checkOrientation);
+            window.removeEventListener('resize', checkOrientation);
+          };
+        }, []);
+
+        if (isPortrait && !dismissed) {
+          return (
+            <React.Fragment>
+              {children}
+              <div
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  width: '100vw',
+                  height: '100vh',
+                  backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                  backdropFilter: 'blur(5px)',
+                  color: '#00ff88', // Original Green
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 9999,
+                  textAlign: 'center',
+                  padding: '20px',
+                  transition: 'opacity 0.3s',
+                }}
+              >
+                <div style={{ fontSize: '48px', marginBottom: '20px' }}>
+                  📱➡️🔄
+                </div>
+                <h2
+                  style={{
+                    marginBottom: '10px',
+                    fontFamily: '"Courier New", monospace',
+                    fontSize: '24px',
+                  }}
+                >
+                  Khuyến nghị xoay ngang màn hình
+                </h2>
+                <p
+                  style={{
+                    color: '#ccc',
+                    maxWidth: '300px',
+                    marginBottom: '30px',
+                    lineHeight: '1.6',
+                    fontSize: '15px',
+                  }}
+                >
+                  Để có góc nhìn tốt nhất, vui lòng xoay thiết bị.
+                  <br />
+                  <span style={{ fontSize: '12px', opacity: 0.8 }}>
+                    (Góc nhìn có thể bị hạn chế ở chế độ dọc)
+                  </span>
+                </p>
+
+                <button
+                  onClick={() => setDismissed(true)}
+                  style={{
+                    padding: '10px 24px',
+                    background: 'transparent',
+                    border: '1px solid #00ff88', // Original Green
+                    color: '#00ff88', // Original Green
+                    borderRadius: '20px',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.background =
+                      'rgba(0, 255, 136, 0.1)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  Tiếp tục &gt;
+                </button>
+              </div>
+            </React.Fragment>
+          );
+        }
+
+        return <React.Fragment>{children}</React.Fragment>;
+      }
+
+      // ==========================================
+      // src/App.tsx
+      // ==========================================
+      function StatusIndicator() {
+        const isTracking = useHandStore((state) => state.isTracking);
+        const gestureMode = useHandStore((state) => state.gestureMode);
+        const [errorMsg, setErrorMsg] = useState('');
+
+        useEffect(() => {
+          const timer = setInterval(() => {
+            if (window._handTrackingError && !errorMsg) {
+              setErrorMsg(window._handTrackingError);
+            }
+          }, 1000);
+          return () => clearInterval(timer);
+        }, [errorMsg]);
+
+        if (errorMsg) {
+          return (
+            <div
+              style={{
+                position: 'fixed',
+                top: '10px',
+                left: '10px',
+                padding: '8px 16px',
+                background: 'rgba(255, 50, 50, 0.8)',
+                borderRadius: '8px',
+                color: '#fff',
+                fontSize: '12px',
+                zIndex: 100,
+                maxWidth: '300px',
+                lineHeight: '1.4',
+              }}
+            >
+              ⚠️ {errorMsg}
+            </div>
+          );
+        }
+
+        const getModeText = () => {
+          if (!isTracking) return '⏳ Đang chờ cử chỉ...';
+          switch (gestureMode) {
+            case 'LOTUS':
+              return '🌸 Trận Pháp Liên Hoa';
+            case 'SHIELD':
+              return '🛡️ Trận Pháp Hộ Thuẫn';
+            default:
+              return '🐉 Trận Pháp Du Long';
+          }
+        };
+
+        const getModeColor = () => {
+          if (!isTracking) return '#ff6666';
+          switch (gestureMode) {
+            case 'LOTUS':
+              return '#ffaa44';
+            case 'SHIELD':
+              return '#88ccff';
+            default:
+              return '#00ff88'; // Original Green
+          }
+        };
+
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              top: '10px',
+              left: '10px',
+              padding: '8px 16px',
+              background: 'rgba(0, 0, 0, 0.5)',
+              borderRadius: '20px',
+              color: getModeColor(),
+              fontSize: '12px',
+              zIndex: 100,
+              transition: 'color 0.3s',
+            }}
+          >
+            {getModeText()}
+          </div>
+        );
+      }
+
+      function UI() {
+        const gestureMode = useHandStore((state) => state.gestureMode);
+        const isTracking = useHandStore((state) => state.isTracking);
+        const [hasError, setHasError] = useState(false);
+
+        useEffect(() => {
+          const timer = setInterval(() => {
+            if (window._handTrackingError) {
+              setHasError(true);
+            }
+          }, 1000);
+          return () => clearInterval(timer);
+        }, []);
+
+        const getColor = () => {
+          if (!isTracking) return '#00ff88'; // Original Green
+          switch (gestureMode) {
+            case 'LOTUS':
+              return '#ffaa44';
+            case 'SHIELD':
+              return '#88ccff';
+            default:
+              return '#00ff88'; // Original Green
+          }
+        };
+
+        const getHint = () => {
+          if (hasError) return '👀 Chế độ xem (Không có điều khiển)';
+          if (!isTracking) return '👋 Vẫy tay để kích hoạt phi kiếm...';
+          switch (gestureMode) {
+            case 'DAGENG':
+              return '🤘 Kết ấn · Đại Canh Kiếm Trận';
+            case 'LOTUS':
+              return '🖐️ Xòe tay · Liên Hoa Hiện Thế';
+            case 'SHIELD':
+              return '✊ Nắm tay · Kiếm Thuẫn Hộ Thể';
+            case 'DRAGON':
+            default:
+              return '👆 Kiếm chỉ · Du Long Tùy Hành';
+          }
+        };
+
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              bottom: '30px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              textAlign: 'center',
+              zIndex: 100,
+              color: '#fff',
+              textShadow: '0 0 10px #00ff88', // Original Green Shadow
+            }}
+          >
+            <h1
+              style={{
+                fontSize: '28px',
+                marginBottom: '8px',
+                color: getColor(),
+                transition: 'color 0.3s',
+              }}
+            >
+              Thanh Trúc Phong Vân Kiếm
+            </h1>
+            <p style={{ fontSize: '14px', opacity: 0.7 }}>{getHint()}</p>
+          </div>
+        );
+      }
+
+      function WebcamView() {
+        const videoRef = useRef(null);
+        const [isReady, setIsReady] = useState(false);
+
+        useEffect(() => {
+          if (videoRef.current) {
+            initHandTracking(videoRef.current).then((success) => {
+              setIsReady(success);
+            });
+          }
+        }, []);
+
+        return (
+          <video
+            ref={videoRef}
+            style={{
+              position: 'fixed',
+              top: '10px',
+              right: '10px',
+              width: '120px',
+              height: '90px',
+              borderRadius: '8px',
+              border: `2px solid ${
+                isReady
+                  ? 'rgba(0, 255, 136, 0.5)' // Original Green
+                  : 'rgba(255, 100, 100, 0.5)'
+              }`,
+              transform: 'scaleX(-1)',
+              opacity: 0,
+              zIndex: 100,
+            }}
+            autoPlay
+            playsInline
+            muted
+          />
+        );
+      }
+
+      // ==========================================
+      // NEW COMPONENTS: Help System
+      // ==========================================
+      function HelpButton({ onClick }) {
+        return (
+          <button
+            onClick={onClick}
+            style={{
+              position: 'fixed',
+              bottom: '30px',
+              right: '30px',
+              width: '50px',
+              height: '50px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(0, 255, 136, 0.2)',
+              border: '2px solid #00ff88',
+              color: '#00ff88',
+              fontSize: '24px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 200, 
+              backdropFilter: 'blur(4px)',
+              transition: 'all 0.3s',
+              boxShadow: '0 0 15px rgba(0, 255, 136, 0.3)'
+            }}
+            onMouseOver={e => e.currentTarget.style.backgroundColor = 'rgba(0, 255, 136, 0.4)'}
+            onMouseOut={e => e.currentTarget.style.backgroundColor = 'rgba(0, 255, 136, 0.2)'}
+            title="Xem Hướng Dẫn"
+          >
+            ?
+          </button>
+        );
+      }
+
+      function HelpModal({ onClose }) {
+        return (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 300,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#fff',
+            padding: '20px'
+          }} onClick={onClose}>
+            <div 
+              className="custom-scroll"
+              style={{
+                maxWidth: '600px',
+                width: '100%',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                backgroundColor: '#1a1a1a',
+                border: '1px solid #00ff88',
+                borderRadius: '16px',
+                padding: '30px',
+                position: 'relative',
+                boxShadow: '0 0 40px rgba(0, 255, 136, 0.2)'
+            }} onClick={e => e.stopPropagation()}>
+              
+              <button onClick={onClose} style={{
+                position: 'absolute',
+                top: '15px',
+                right: '15px',
+                background: 'none',
+                border: 'none',
+                color: '#fff',
+                fontSize: '28px',
+                cursor: 'pointer',
+                opacity: 0.7
+              }}>×</button>
+
+              <h2 style={{ 
+                color: '#00ff88', 
+                textAlign: 'center', 
+                marginBottom: '30px', 
+                fontFamily: '"Times New Roman", serif',
+                fontSize: '28px',
+                textShadow: '0 0 10px rgba(0, 255, 136, 0.5)'
+              }}>
+                📖 Bí Kíp Thao Tác
+              </h2>
+
+              <div style={{ marginBottom: '30px' }}>
+                <h3 style={{ color: '#ffdd44', marginBottom: '15px', fontSize: '20px', borderBottom: '1px solid #333', paddingBottom: '10px' }}>🎮 Các Thế Tay (Cử Chỉ)</h3>
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                  <li style={{ marginBottom: '20px', display: 'flex', alignItems: 'flex-start', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '32px', width: '50px', marginRight: '10px' }}>👈</span>
+                    <div>
+                      <strong style={{ color: '#00ff88', fontSize: '16px', display: 'block', marginBottom: '4px' }}>Kiếm Chỉ (Ngón trỏ)</strong>
+                      <div style={{ fontSize: '14px', color: '#ccc', lineHeight: '1.5' }}>
+                        Kích hoạt <em>Du Long Tùy Hành</em>.<br/>
+                        Phi kiếm hóa thành một con rồng xanh, bay lượn linh hoạt theo đầu ngón tay bạn.
+                      </div>
+                    </div>
+                  </li>
+                  <li style={{ marginBottom: '20px', display: 'flex', alignItems: 'flex-start', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '32px', width: '50px', marginRight: '10px' }}>✋</span>
+                    <div>
+                      <strong style={{ color: '#ffaa44', fontSize: '16px', display: 'block', marginBottom: '4px' }}>Chưởng Pháp (Xòe tay)</strong>
+                      <div style={{ fontSize: '14px', color: '#ccc', lineHeight: '1.5' }}>
+                        Kích hoạt <em>Liên Hoa Hiện Thế</em>.<br/>
+                        Vạn kiếm quy tông, xoay tròn và kết thành một đóa kiếm liên đang nở rộ tuyệt đẹp.
+                      </div>
+                    </div>
+                  </li>
+                  <li style={{ marginBottom: '20px', display: 'flex', alignItems: 'flex-start', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '32px', width: '50px', marginRight: '10px' }}>✊</span>
+                    <div>
+                      <strong style={{ color: '#88ccff', fontSize: '16px', display: 'block', marginBottom: '4px' }}>Quyền Pháp (Nắm tay)</strong>
+                      <div style={{ fontSize: '14px', color: '#ccc', lineHeight: '1.5' }}>
+                        Kích hoạt <em>Kiếm Thuẫn Hộ Thể</em>.<br/>
+                        Phi kiếm tạo thành quả cầu bảo vệ xoay quanh bạn, phòng ngự tuyệt đối.
+                      </div>
+                    </div>
+                  </li>
+                  <li style={{ marginBottom: '20px', display: 'flex', alignItems: 'flex-start', background: 'rgba(255,50,50,0.1)', padding: '10px', borderRadius: '8px', border: '1px dashed #ff5555' }}>
+                    <span style={{ fontSize: '32px', width: '50px', marginRight: '10px' }}>🤘</span>
+                    <div>
+                      <strong style={{ color: '#ff5555', fontSize: '16px', display: 'block', marginBottom: '4px' }}>Ấn Chú (Rock/Metal)</strong>
+                      <div style={{ fontSize: '14px', color: '#ccc', lineHeight: '1.5' }}>
+                        Kích hoạt <em>Đại Canh Kiếm Trận</em>.<br/>
+                        Triệu hồi cự kiếm và pháp trận thông thiên từ trên cao giáng xuống. <strong>(Cảnh báo năng lượng cao!)</strong>
+                      </div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 style={{ color: '#ffdd44', marginBottom: '15px', fontSize: '20px', borderBottom: '1px solid #333', paddingBottom: '10px' }}>💡 Mẹo Nhỏ</h3>
+                <ul style={{ paddingLeft: '20px', color: '#ccc', fontSize: '14px', lineHeight: '1.8' }}>
+                  <li>Đảm bảo ánh sáng môi trường đủ tốt để camera nhận diện bàn tay rõ ràng.</li>
+                  <li>Giữ khoảng cách tay với camera khoảng <strong>0.5m - 1m</strong>.</li>
+                  <li>Nếu chơi trên điện thoại, hãy <strong>xoay ngang màn hình</strong> để có góc nhìn rộng và đẹp nhất.</li>
+                  <li>Di chuyển tay chậm rãi để phi kiếm bay mượt mà hơn.</li>
+                </ul>
+              </div>
+              
+              <div style={{ textAlign: 'center', marginTop: '30px' }}>
+                  <button onClick={onClose} style={{
+                      padding: '12px 32px',
+                      backgroundColor: '#00ff88',
+                      color: '#000',
+                      border: 'none',
+                      borderRadius: '30px',
+                      fontWeight: 'bold',
+                      fontSize: '16px',
+                      cursor: 'pointer',
+                      boxShadow: '0 0 15px rgba(0, 255, 136, 0.5)',
+                      transition: 'transform 0.2s'
+                  }}
+                  onMouseOver={e => e.currentTarget.style.transform = 'scale(1.05)'}
+                  onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                  >Đã Hiểu, Khai Mở Kiếm Trận!</button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function App() {
+        const [showHelp, setShowHelp] = useState(false);
+
+        return (
+          <OrientationGuard>
+            <div style={{ width: '100vw', height: '100vh' }}>
+              <WebcamView />
+
+              <Canvas
+                camera={{ position: [0, 3, 35], fov: 60 }}
+                dpr={[1, 2]}
+                gl={{ antialias: false, alpha: true }}
+              >
+                <Scene />
+                <HandController />
+              </Canvas>
+
+              <StatusIndicator />
+              <UI />
+              
+              {/* Help System */}
+              <HelpButton onClick={() => setShowHelp(true)} />
+              {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+              
+            </div>
+          </OrientationGuard>
+        );
+      }
+
+      const root = createRoot(document.getElementById('root'));
+      root.render(
+        <React.StrictMode>
+          <App />
+        </React.StrictMode>
+      );
+    </script>
+  </body>
+</html>

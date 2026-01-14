@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Magic Heart - I LOVE YOU (3D Hearts)</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+    #canvas-container { width: 100%; height: 100vh; display: block; }
+
+    #ui-layer {
+      position: absolute; bottom: 30px; width: 100%;
+      text-align: center; pointer-events: none; z-index: 100;
+    }
+    .guide {
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 16px;
+      margin-bottom: 10px;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+      letter-spacing: 0.6px;
+      font-family: 'Pacifico', cursive;
+    }
+
+    .row { display: inline-flex; gap: 10px; align-items: center; justify-content: center; pointer-events: none; }
+
+    button {
+      pointer-events: auto; cursor: pointer;
+      background: linear-gradient(to right, #ff416c, #ff4b2b);
+      color: #FFF; border: none;
+      padding: 12px 22px; border-radius: 50px;
+      font-family: 'Pacifico', cursive; font-size: 20px;
+      box-shadow: 0 0 22px rgba(255, 75, 43, 0.45);
+      transition: transform 0.2s, opacity 0.2s;
+    }
+    button:hover { transform: scale(1.06); }
+    button:disabled { background: #555; cursor: not-allowed; box-shadow: none; opacity: 0.7; }
+
+    .secondary {
+      background: linear-gradient(to right, rgba(255,255,255,0.18), rgba(255,255,255,0.10));
+      border: 1px solid rgba(255,255,255,0.25);
+      box-shadow: 0 0 18px rgba(255, 65, 108, 0.20);
+      font-size: 18px;
+    }
+
+    #camera-preview {
+      position: absolute; bottom: 20px; left: 20px;
+      width: 160px; height: 120px;
+      border: 2px solid rgba(255, 65, 108, 0.95);
+      transform: scaleX(-1); opacity: 0.65; border-radius: 10px;
+      background: #111; z-index: 200;
+    }
+
+    #copyright {
+      position: absolute; bottom: 10px; right: 15px;
+      color: rgba(255, 255, 255, 0.25); font-size: 12px; z-index: 100;
+      font-family: sans-serif; pointer-events: none;
+    }
+
+    #loading {
+      display: none; color: rgba(255,255,255,0.9);
+      margin-top: 10px; font-size: 14px;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    #errorBox {
+      display: none;
+      width: min(860px, calc(100% - 40px));
+      margin: 12px auto 0;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255, 50, 100, 0.10);
+      border: 1px solid rgba(255, 90, 140, 0.35);
+      box-shadow: 0 0 18px rgba(255, 70, 120, 0.18);
+      color: rgba(255,255,255,0.92);
+      pointer-events: auto;
+      text-align: left;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    #errorBox b { color: rgba(255,255,255,0.98); }
+    #errorBox code { background: rgba(0,0,0,0.35); padding: 2px 6px; border-radius: 6px; }
+
+    #statusLine {
+      display: none;
+      width: min(860px, calc(100% - 40px));
+      margin: 10px auto 0;
+      padding: 10px 14px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: rgba(255,255,255,0.88);
+      text-align: left;
+      font-size: 13px;
+      line-height: 1.35;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui-layer">
+    <div class="guide">🫶 <b>Heart Gesture:</b> form “I LOVE YOU” &nbsp;|&nbsp; 🖐 <b>Relax:</b> big 3D heart</div>
+
+    <div class="row">
+      <button id="btnStart" onclick="startSystem()">Start Magic</button>
+      <button id="btnRetry" class="secondary" onclick="retryCamera()" style="display:none">Retry Camera</button>
+      <button id="btnDemo" class="secondary" onclick="startDemoMode()" style="display:none">Run Demo</button>
+    </div>
+
+    <div id="loading">Starting Camera & AI... Please wait...</div>
+
+    <div id="errorBox"></div>
+    <div id="statusLine"></div>
+  </div>
+
+  <div id="copyright">Made with ❤️ (no images)</div>
+
+  <div id="canvas-container"></div>
+  <video class="input_video" style="display:none" playsinline></video>
+  <canvas id="camera-preview"></canvas>
+
+  <script>
+    const CONFIG = {
+      count: 2400,
+      heartScale: 0.60,
+      bigHeartScale: 3.6,
+      textScale: 0.12,
+      textStep: 5,
+      swirlIdle: 3.2,
+      swirlText: 0.9,
+      lerpIdle: 0.055,
+      lerpText: 0.085,
+      flyInRadius: 220,
+      orbitSpeed: 0.18,
+      selfSpin: 0.75,
+      holdFrames: 7,
+      textHoldMs: 5200,
+      thresholdIndex: 0.12,
+      thresholdThumb: 0.14,
+
+      demoEveryMs: 8000,
+      demoTextMs: 2800
+    };
+
+    let scene, camera, renderer;
+    let hearts;
+
+    let state = 'HEART'; // HEART | TEXT
+    let handX = 0.5;
+
+    const pos = [];
+    const targetHeart = [];
+    const targetText = [];
+
+    let gestureFrames = 0;
+    let textUntil = 0;
+
+    let initialized3D = false;
+
+    let hands = null;
+    let cam = null;
+    let demoTimer = null;
+
+    function show(el, on) { el.style.display = on ? 'block' : 'none'; }
+
+    function setError(html) {
+      const box = document.getElementById('errorBox');
+      box.innerHTML = html;
+      show(box, true);
+    }
+
+    function clearError() {
+      const box = document.getElementById('errorBox');
+      box.innerHTML = '';
+      show(box, false);
+    }
+
+    function setStatus(text) {
+      const st = document.getElementById('statusLine');
+      st.textContent = text;
+      show(st, !!text);
+    }
+
+    function createHeartShape() {
+      const shape = new THREE.Shape();
+      const s = 2.35;
+
+      shape.moveTo(0, s * 0.9);
+      shape.bezierCurveTo(0, s * 0.65, -s * 1.25, s * 0.55, -s * 1.25, -s * 0.25);
+      shape.bezierCurveTo(-s * 1.25, -s * 1.25, -s * 0.25, -s * 1.55, 0, -s * 0.85);
+      shape.bezierCurveTo(s * 0.25, -s * 1.55, s * 1.25, -s * 1.25, s * 1.25, -s * 0.25);
+      shape.bezierCurveTo(s * 1.25, s * 0.55, 0, s * 0.65, 0, s * 0.9);
+
+      return shape;
+    }
+
+    function createHeartGeometry() {
+      const shape = createHeartShape();
+      const geo = new THREE.ExtrudeGeometry(shape, {
+        depth: 0.95,
+        bevelEnabled: true,
+        bevelThickness: 0.42,
+        bevelSize: 0.34,
+        bevelSegments: 6,
+        curveSegments: 64
+      });
+      geo.center();
+      geo.rotateX(Math.PI);
+      geo.scale(CONFIG.heartScale, CONFIG.heartScale, CONFIG.heartScale);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    function generateBigHeartTargets(count) {
+      const targets = [];
+      for (let i = 0; i < count; i++) {
+        const t = Math.random() * Math.PI * 2;
+        let x = 16 * Math.pow(Math.sin(t), 3);
+        let y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+
+        const r = Math.pow(Math.random(), 0.33);
+        x *= r; y *= r;
+        const z = (Math.random() - 0.5) * 10 * r;
+
+        targets.push(new THREE.Vector3(
+          x * CONFIG.bigHeartScale,
+          y * CONFIG.bigHeartScale + 10,
+          z * CONFIG.bigHeartScale
+        ));
+      }
+      return targets;
+    }
+
+    function generateTextTargets(text, count) {
+      const canvas = document.createElement('canvas');
+      const w = 1400, h = 420;
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.font = 'bold 170px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      const grd = ctx.createLinearGradient(0, 0, w, 0);
+      grd.addColorStop(0, '#ff00cc');
+      grd.addColorStop(0.55, '#ff416c');
+      grd.addColorStop(1, '#ff4b2b');
+      ctx.fillStyle = grd;
+      ctx.fillText(text, w / 2, h / 2);
+
+      const img = ctx.getImageData(0, 0, w, h).data;
+      const pts = [];
+
+      for (let y = 0; y < h; y += CONFIG.textStep) {
+        for (let x = 0; x < w; x += CONFIG.textStep) {
+          const i = (y * w + x) * 4;
+          const a = img[i + 3];
+          if (a > 40) {
+            const wx = (x - w / 2) * CONFIG.textScale;
+            const wy = -(y - h / 2) * CONFIG.textScale;
+            const wz = (Math.random() - 0.5) * 6.5;
+            pts.push(new THREE.Vector3(wx, wy, wz));
+          }
+        }
+      }
+
+      const targets = [];
+      for (let i = 0; i < count; i++) {
+        const p = pts[i % pts.length];
+        targets.push(p.clone());
+      }
+      return targets;
+    }
+
+    function init3D() {
+      if (initialized3D) return;
+      initialized3D = true;
+
+      const container = document.getElementById('canvas-container');
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x000000, 0.0022);
+
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1200);
+      camera.position.set(0, 8, 120);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(renderer.domElement);
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+      scene.add(ambient);
+
+      const key = new THREE.DirectionalLight(0xffffff, 0.95);
+      key.position.set(70, 90, 80);
+      scene.add(key);
+
+      const pink1 = new THREE.PointLight(0xff2d88, 1.25, 500);
+      pink1.position.set(-75, 35, 90);
+      scene.add(pink1);
+
+      const pink2 = new THREE.PointLight(0xff7a2b, 0.85, 500);
+      pink2.position.set(85, -10, 110);
+      scene.add(pink2);
+
+      createHearts();
+      runSelfTests();
+      animate();
+    }
+
+    function createHearts() {
+      const geo = createHeartGeometry();
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: 0xff3b8d,
+        metalness: 0.55,
+        roughness: 0.18,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.22,
+        emissive: 0x25000f,
+        emissiveIntensity: 0.65
+      });
+
+      hearts = new THREE.InstancedMesh(geo, mat, CONFIG.count);
+      hearts.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      if (hearts.instanceColor) hearts.instanceColor.setUsage(THREE.DynamicDrawUsage);
+
+      const c1 = new THREE.Color('#ff00cc');
+      const c2 = new THREE.Color('#ff416c');
+      const c3 = new THREE.Color('#ff4b2b');
+
+      const big = generateBigHeartTargets(CONFIG.count);
+      const txt = generateTextTargets('I LOVE YOU', CONFIG.count);
+
+      for (let i = 0; i < CONFIG.count; i++) {
+        targetHeart.push(big[i]);
+        targetText.push(txt[i]);
+
+        pos.push(new THREE.Vector3(
+          (Math.random() - 0.5) * 220,
+          (Math.random() - 0.5) * 160,
+          (Math.random() - 0.5) * 220
+        ));
+
+        const mix = Math.random();
+        const col = (mix < 0.5)
+          ? c1.clone().lerp(c2, mix / 0.5)
+          : c2.clone().lerp(c3, (mix - 0.5) / 0.5);
+        hearts.setColorAt(i, col);
+      }
+
+      hearts.instanceColor.needsUpdate = true;
+      scene.add(hearts);
+    }
+
+    function enterTextMode() {
+      state = 'TEXT';
+      textUntil = Date.now() + CONFIG.textHoldMs;
+
+      for (let i = 0; i < CONFIG.count; i++) {
+        const u = Math.random();
+        const v = Math.random();
+        const phi = Math.acos(2 * v - 1);
+        const theta = 2 * Math.PI * u;
+        const r = CONFIG.flyInRadius * (0.7 + Math.random() * 0.35);
+
+        pos[i].set(
+          r * Math.sin(phi) * Math.cos(theta),
+          r * Math.sin(phi) * Math.sin(theta),
+          r * Math.cos(phi)
+        );
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const t = Date.now() * 0.001;
+
+      if (state === 'TEXT' && Date.now() > textUntil) state = 'HEART';
+
+      if (hearts) {
+        const handRotY = (handX - 0.5) * 2.1;
+        hearts.rotation.y += (handRotY - hearts.rotation.y) * 0.06;
+
+        const lerpK = (state === 'TEXT') ? CONFIG.lerpText : CONFIG.lerpIdle;
+        const swirl = (state === 'TEXT') ? CONFIG.swirlText : CONFIG.swirlIdle;
+
+        const dummy = new THREE.Object3D();
+        const orbit = t * CONFIG.orbitSpeed;
+
+        for (let i = 0; i < CONFIG.count; i++) {
+          const target = (state === 'TEXT') ? targetText[i] : targetHeart[i];
+
+          const a = orbit + i * 0.0023;
+          const ox = Math.cos(a) * swirl;
+          const oz = Math.sin(a) * swirl;
+
+          const breathe = 0.65 * Math.sin(t * 1.6 + i * 0.02);
+          const tx = target.x + ox;
+          const ty = target.y + breathe;
+          const tz = target.z + oz;
+
+          pos[i].x += (tx - pos[i].x) * lerpK;
+          pos[i].y += (ty - pos[i].y) * lerpK;
+          pos[i].z += (tz - pos[i].z) * lerpK;
+
+          const spin = t * CONFIG.selfSpin * (0.7 + (i % 11) * 0.03);
+          const tilt = 0.35 * Math.sin(t * 0.9 + i * 0.015);
+
+          dummy.position.set(pos[i].x, pos[i].y, pos[i].z);
+          dummy.rotation.set(tilt, spin, 0.18 * Math.cos(spin));
+
+          const pulse = (state === 'HEART') ? (1 + 0.06 * Math.sin(t * 3.0 + i * 0.01)) : 1.0;
+          dummy.scale.setScalar(pulse);
+
+          dummy.updateMatrix();
+          hearts.setMatrixAt(i, dummy.matrix);
+        }
+
+        hearts.instanceMatrix.needsUpdate = true;
+      }
+
+      if (renderer && scene && camera) renderer.render(scene, camera);
+    }
+
+    // --- Camera / Mediapipe ---
+    async function preflightCamera() {
+      // Some browsers require a direct getUserMedia call in a user gesture to trigger permissions.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: false
+      });
+      stream.getTracks().forEach(t => t.stop());
+    }
+
+    function friendlyCameraError(err) {
+      const name = (err && (err.name || err.code)) ? (err.name || err.code) : 'UnknownError';
+      const isSecure = window.isSecureContext;
+      const proto = location.protocol;
+
+      let tips = '';
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        tips = `
+          <li>Allow camera permission in the browser (click the <b>camera icon</b> in the address bar).</li>
+          <li>Make sure you run on <b>localhost</b> or <b>HTTPS</b> (current: <code>${proto}</code>, secure: <code>${isSecure}</code>).</li>
+          <li>Close other tabs/apps using the camera (Zoom/Meet/Camera app).</li>
+        `;
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        tips = `<li>No camera device found. Plug in/enable a webcam and retry.</li>`;
+      } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+        tips = `<li>Camera is busy or blocked by OS. Close other apps and retry.</li>`;
+      } else {
+        tips = `<li>Open DevTools → Console to see details, then retry.</li>`;
+      }
+
+      return `
+        <div><b>Camera blocked:</b> <code>${name}</code></div>
+        <div style="margin-top:6px; opacity:0.92;">
+          Try these fixes:
+          <ul style="margin:6px 0 0 18px; padding:0;">
+            ${tips}
+          </ul>
+          <div style="margin-top:8px; opacity:0.9;">You can still run <b>Demo</b> (no camera) to preview the effect.</div>
+        </div>
+      `;
+    }
+
+    async function setupMediapipe() {
+      const video = document.getElementsByClassName('input_video')[0];
+      const canvas = document.getElementById('camera-preview');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 320; canvas.height = 240;
+
+      hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+      hands.setOptions({
+        maxNumHands: 2,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.6,
+        minTrackingConfidence: 0.6
+      });
+
+      function d(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+      hands.onResults(results => {
+        ctx.save();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+
+        const lm = results.multiHandLandmarks || [];
+
+        if (lm.length > 0) {
+          handX = lm[0][9].x;
+        }
+
+        let heartGesture = false;
+        if (lm.length === 2) {
+          const h1 = lm[0];
+          const h2 = lm[1];
+
+          const distIndex = d(h1[8], h2[8]);
+          const distThumb = d(h1[4], h2[4]);
+
+          heartGesture = (distIndex < CONFIG.thresholdIndex) && (distThumb < CONFIG.thresholdThumb);
+        }
+
+        if (heartGesture) {
+          gestureFrames++;
+          if (gestureFrames >= CONFIG.holdFrames && state !== 'TEXT') {
+            enterTextMode();
+          }
+        } else {
+          gestureFrames = 0;
+          if (state !== 'TEXT') state = 'HEART';
+        }
+      });
+
+      cam = new Camera(video, {
+        onFrame: async () => { await hands.send({ image: video }); },
+        width: 640,
+        height: 480
+      });
+
+      await cam.start();
+    }
+
+    function stopDemo() {
+      if (demoTimer) {
+        clearInterval(demoTimer);
+        demoTimer = null;
+      }
+    }
+
+    function startDemoMode() {
+      stopDemo();
+      setStatus('Demo mode: auto switching HEART ↔ TEXT (no camera).');
+      show(document.getElementById('btnDemo'), false);
+      show(document.getElementById('btnRetry'), true);
+
+      demoTimer = setInterval(() => {
+        enterTextMode();
+        setTimeout(() => {
+          if (state === 'TEXT') state = 'HEART';
+        }, CONFIG.demoTextMs);
+      }, CONFIG.demoEveryMs);
+
+      // immediate preview
+      enterTextMode();
+      setTimeout(() => { if (state === 'TEXT') state = 'HEART'; }, CONFIG.demoTextMs);
+    }
+
+    async function startSystem() {
+      const btn = document.getElementById('btnStart');
+      const retry = document.getElementById('btnRetry');
+      const demo = document.getElementById('btnDemo');
+      const loading = document.getElementById('loading');
+
+      btn.disabled = true;
+      btn.innerText = 'Loading...';
+      show(loading, true);
+      clearError();
+      setStatus('');
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setError('Camera API not supported. Use a modern browser (Chrome/Edge) and run on <b>localhost</b> or <b>HTTPS</b>.');
+        show(loading, false);
+        show(demo, true);
+        btn.disabled = false;
+        btn.innerText = 'Start Magic';
+        init3D();
+        return;
+      }
+
+      init3D();
+
+      // Preflight permission (most reliable way to trigger permission prompt)
+      try {
+        await preflightCamera();
+      } catch (err) {
+        console.error('preflightCamera error:', err);
+        setError(friendlyCameraError(err));
+        show(loading, false);
+        show(btn, false);
+        show(retry, true);
+        show(demo, true);
+        startDemoMode();
+        return;
+      }
+
+      // If permission ok, start mediapipe.
+      try {
+        stopDemo();
+        await setupMediapipe();
+        show(loading, false);
+        show(btn, false);
+        show(retry, false);
+        show(demo, false);
+        clearError();
+        setStatus('Camera active. Make a heart gesture (2 hands) to form “I LOVE YOU”.');
+      } catch (err) {
+        console.error('setupMediapipe error:', err);
+        setError(friendlyCameraError(err));
+        show(loading, false);
+        show(btn, false);
+        show(retry, true);
+        show(demo, true);
+        startDemoMode();
+      }
+    }
+
+    async function retryCamera() {
+      clearError();
+      setStatus('Retrying camera...');
+
+      try {
+        stopDemo();
+        await preflightCamera();
+        await setupMediapipe();
+        clearError();
+        setStatus('Camera active. Make a heart gesture (2 hands) to form “I LOVE YOU”.');
+        show(document.getElementById('btnRetry'), false);
+        show(document.getElementById('btnDemo'), false);
+      } catch (err) {
+        console.error('retryCamera error:', err);
+        setError(friendlyCameraError(err));
+        show(document.getElementById('btnRetry'), true);
+        show(document.getElementById('btnDemo'), true);
+        startDemoMode();
+      }
+    }
+
+    // --- Minimal self-tests (runtime) ---
+    function assert(cond, msg) {
+      if (!cond) throw new Error('Test failed: ' + msg);
+    }
+
+    function runSelfTests() {
+      try {
+        assert(CONFIG.count > 0, 'CONFIG.count must be > 0');
+        assert(targetHeart.length === CONFIG.count, 'targetHeart length mismatch');
+        assert(targetText.length === CONFIG.count, 'targetText length mismatch');
+        assert(pos.length === CONFIG.count, 'pos length mismatch');
+
+        // Spot-check a few vectors for NaN
+        for (const arr of [targetHeart, targetText, pos]) {
+          for (let i = 0; i < 6; i++) {
+            const v = arr[Math.floor(Math.random() * arr.length)];
+            assert(Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z), 'vector has NaN/Infinity');
+          }
+        }
+        console.log('[SelfTests] OK');
+      } catch (e) {
+        console.error('[SelfTests] FAIL', e);
+        setError('<b>Internal self-test failed.</b> Open DevTools → Console for details.');
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      if (!camera || !renderer) return;
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
